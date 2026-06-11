@@ -162,6 +162,14 @@
         <input type="checkbox" id="sticks-only-cb">
         <label for="sticks-only-cb">Sticks only</label>
       </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="show-symbols-cb">
+        <label for="show-symbols-cb">Atom symbols</label>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="show-indices-cb">
+        <label for="show-indices-cb">Atom indices</label>
+      </div>
     </div>
 
     <button id="advanced-toggle">▸ Advanced</button>
@@ -378,8 +386,9 @@
     // Global state
     let currentMoleculeData = null, currentMode = null;
     let currentBonds = [], defaultBonds = [];
-    let scene, camera, renderer, moleculeGroup, arrowGroup;
-    let atomMeshes = [], bondMeshes = [], arrowMeshGroups = [];
+    let scene, camera, renderer, moleculeGroup, arrowGroup, labelGroup;
+    let atomMeshes = [], bondMeshes = [], arrowMeshGroups = [], labelSprites = [];
+    let showSymbols = false, showIndices = false;
     let displayMode = 'animation', isUserInteracting = false;
     let animationTime = 0, lastTimestamp = null;
     let ballScale = 0.4, stickRadius = 0.12, sticksOnly = false;
@@ -408,8 +417,10 @@
 
       moleculeGroup = new THREE.Group();
       arrowGroup    = new THREE.Group();
+      labelGroup    = new THREE.Group();
       scene.add(moleculeGroup);
       scene.add(arrowGroup);
+      scene.add(labelGroup);
 
       setupInteraction(container);
       window.addEventListener('resize', () => {
@@ -435,6 +446,8 @@
         moleculeGroup.rotation.x += (cur.y - prev.y) * 0.008;
         arrowGroup.rotation.y = moleculeGroup.rotation.y;
         arrowGroup.rotation.x = moleculeGroup.rotation.x;
+        labelGroup.rotation.y = moleculeGroup.rotation.y;
+        labelGroup.rotation.x = moleculeGroup.rotation.x;
         prev = cur;
       };
 
@@ -522,6 +535,7 @@
       atoms.forEach(a => { const d = a.x*a.x + a.y*a.y + a.z*a.z; if (d > maxDistSq) maxDistSq = d; });
       moleculeGroup.rotation.set(0, 0, 0);
       arrowGroup.rotation.set(0, 0, 0);
+      labelGroup.rotation.set(0, 0, 0);
       camera.position.set(0, 0, Math.max(10, Math.sqrt(maxDistSq) * 2.5));
       camera.lookAt(0, 0, 0);
     }
@@ -607,6 +621,57 @@
       });
     }
 
+    function makeTextSprite(text) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 128; canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      ctx.font = 'bold 44px Arial, sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillText(text, 65, 34);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(text, 64, 32);
+      const tex = new THREE.CanvasTexture(canvas);
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.set(1.2, 0.6, 1.0);
+      return sprite;
+    }
+
+    function buildLabels(atoms) {
+      while (labelGroup.children.length > 0) {
+        const s = labelGroup.children[0];
+        labelGroup.remove(s);
+        if (s.material) { if (s.material.map) s.material.map.dispose(); s.material.dispose(); }
+      }
+      labelSprites = [];
+
+      if (!showSymbols && !showIndices) { labelGroup.visible = false; return; }
+
+      atoms.forEach((atom, i) => {
+        const text = (showSymbols && showIndices) ? `${atom.element}${i + 1}`
+                   : showSymbols ? atom.element : `${i + 1}`;
+        const sprite = makeTextSprite(text);
+        const r = (VDW_RADII[atom.element] || VDW_RADII.DEFAULT) * ballScale;
+        sprite.position.set(atom.x, atom.y + r + 0.35, atom.z);
+        labelGroup.add(sprite);
+        labelSprites.push(sprite);
+      });
+
+      labelGroup.visible = true;
+      labelGroup.rotation.copy(moleculeGroup.rotation);
+    }
+
+    function updateLabelPositions() {
+      if (!labelGroup.visible) return;
+      atomMeshes.forEach((mesh, i) => {
+        if (!labelSprites[i]) return;
+        const atom = currentMoleculeData.atoms[i];
+        const r = (VDW_RADII[atom.element] || VDW_RADII.DEFAULT) * ballScale;
+        labelSprites[i].position.set(mesh.position.x, mesh.position.y + r + 0.35, mesh.position.z);
+      });
+    }
+
     // === 6. ANIMATION LOOP ===
 
     const ANIM_PERIOD = 2.0; // seconds per oscillation cycle
@@ -634,6 +699,9 @@
 
       // Update arrow positions in 'both' mode
       if (displayMode === 'both') updateArrowPositions();
+
+      // Update label positions when atoms move
+      if (displayMode === 'animation' || displayMode === 'both') updateLabelPositions();
     }
 
     function animate(timestamp) {
@@ -831,6 +899,7 @@
       currentBonds = bonds;
       if (!currentMoleculeData) return;
       renderMolecule(currentMoleculeData.atoms, bonds);
+      buildLabels(currentMoleculeData.atoms);
       if (currentMode) buildArrows(currentMoleculeData.atoms, currentMode);
     }
 
@@ -852,6 +921,7 @@
       updateBondTextarea(currentBonds);
 
       renderMolecule(data.atoms, currentBonds);
+      buildLabels(data.atoms);
       populateModeList(data.modes);
       document.getElementById('file-name').textContent = filename;
 
@@ -885,6 +955,16 @@
       e.preventDefault();
       overlay.classList.remove('active');
       if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+    });
+
+    // Atom label checkboxes
+    document.getElementById('show-symbols-cb').addEventListener('change', e => {
+      showSymbols = e.target.checked;
+      if (currentMoleculeData) buildLabels(currentMoleculeData.atoms);
+    });
+    document.getElementById('show-indices-cb').addEventListener('change', e => {
+      showIndices = e.target.checked;
+      if (currentMoleculeData) buildLabels(currentMoleculeData.atoms);
     });
 
     window.onload = function () {
