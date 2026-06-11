@@ -374,6 +374,82 @@
     }
 
     // === 3. SCENE SETUP ===
+
+    // Global state
+    let currentMoleculeData = null, currentMode = null;
+    let currentBonds = [], defaultBonds = [];
+    let scene, camera, renderer, moleculeGroup, arrowGroup;
+    let atomMeshes = [], bondMeshes = [], arrowMeshGroups = [];
+    let displayMode = 'animation', isUserInteracting = false;
+    let animationTime = 0, lastTimestamp = null;
+    let ballScale = 0.4, stickRadius = 0.12, sticksOnly = false;
+    let bondTolerance = 1.25, amplitude = 1.0;
+
+    function initScene() {
+      const container = document.getElementById('canvas-container');
+
+      scene = new THREE.Scene();
+
+      camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 2000);
+      camera.position.set(0, 0, 15);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      container.appendChild(renderer.domElement);
+
+      scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+      const d1 = new THREE.DirectionalLight(0xffffff, 0.7);
+      d1.position.set(10, 20, 15);
+      scene.add(d1);
+      const d2 = new THREE.DirectionalLight(0xaaccff, 0.3);
+      d2.position.set(-10, -10, -15);
+      scene.add(d2);
+
+      moleculeGroup = new THREE.Group();
+      arrowGroup    = new THREE.Group();
+      scene.add(moleculeGroup);
+      scene.add(arrowGroup);
+
+      setupInteraction(container);
+      window.addEventListener('resize', () => {
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container.clientWidth, container.clientHeight);
+      });
+    }
+
+    function setupInteraction(container) {
+      let prev = { x: 0, y: 0 };
+
+      const getXY = e => e.touches
+        ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+        : { x: e.offsetX, y: e.offsetY };
+
+      const onStart = e => { isUserInteracting = true; prev = getXY(e); };
+      const onEnd   = ()  => { isUserInteracting = false; };
+      const onMove  = e  => {
+        if (!isUserInteracting) return;
+        const cur = getXY(e);
+        moleculeGroup.rotation.y += (cur.x - prev.x) * 0.008;
+        moleculeGroup.rotation.x += (cur.y - prev.y) * 0.008;
+        arrowGroup.rotation.y = moleculeGroup.rotation.y;
+        arrowGroup.rotation.x = moleculeGroup.rotation.x;
+        prev = cur;
+      };
+
+      container.addEventListener('mousedown',  onStart);
+      document.addEventListener('mouseup',     onEnd);
+      document.addEventListener('mousemove',   onMove);
+      container.addEventListener('touchstart', onStart, { passive: false });
+      container.addEventListener('touchend',   onEnd);
+      container.addEventListener('touchmove',  onMove,  { passive: false });
+
+      container.addEventListener('wheel', e => {
+        camera.position.z = Math.max(3, Math.min(200, camera.position.z + e.deltaY * 0.05));
+      });
+    }
+
     // === 4. MOLECULE RENDERING ===
     // === 5. ARROW RENDERING ===
     // === 6. ANIMATION LOOP ===
