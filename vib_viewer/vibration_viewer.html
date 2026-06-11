@@ -541,6 +541,72 @@
     }
 
     // === 5. ARROW RENDERING ===
+
+    const MAX_ARROW_LEN  = 3.0;  // scene units for the longest arrow in a mode
+    const MIN_DISP_FRAC  = 0.01; // hide arrows below 1% of mode max displacement
+    const ARROW_COLOR    = 0x00FFAA;
+
+    function buildArrows(atoms, mode) {
+      // Dispose existing arrows
+      while (arrowGroup.children.length > 0) {
+        const g = arrowGroup.children[0];
+        arrowGroup.remove(g);
+        g.traverse(c => { if (c.geometry) c.geometry.dispose(); if (c.material) c.material.dispose(); });
+      }
+      arrowMeshGroups = [];
+
+      const mags = mode.displacements.map(d => Math.sqrt(d.dx*d.dx + d.dy*d.dy + d.dz*d.dz));
+      const maxMag = Math.max(...mags);
+      if (maxMag === 0) return;
+
+      const arrowMat = new THREE.MeshStandardMaterial({ color: ARROW_COLOR, roughness: 0.3, metalness: 0.2 });
+
+      atoms.forEach((atom, i) => {
+        const group = new THREE.Group();
+        group.position.set(atom.x, atom.y, atom.z);
+
+        const frac = mags[i] / maxMag;
+        if (frac >= MIN_DISP_FRAC) {
+          const totalLen  = MAX_ARROW_LEN * frac;
+          const shaftLen  = totalLen * 0.78;
+          const headLen   = totalLen * 0.22;
+          const shaftR    = 0.055;
+          const headR     = 0.13;
+
+          // Shaft: CylinderGeometry along Y, translate so base is at origin
+          const shaftGeo = new THREE.CylinderGeometry(shaftR, shaftR, shaftLen, 8);
+          shaftGeo.translate(0, shaftLen / 2, 0);
+          group.add(new THREE.Mesh(shaftGeo, arrowMat));
+
+          // Head: cone at tip
+          const headGeo = new THREE.ConeGeometry(headR, headLen, 8);
+          headGeo.translate(0, shaftLen + headLen / 2, 0);
+          group.add(new THREE.Mesh(headGeo, arrowMat));
+
+          // Rotate group so +Y points along displacement direction
+          const dir = new THREE.Vector3(mode.displacements[i].dx, mode.displacements[i].dy, mode.displacements[i].dz).normalize();
+          const up  = new THREE.Vector3(0, 1, 0);
+          if (Math.abs(dir.dot(up) + 1) < 0.0001) {
+            group.quaternion.set(1, 0, 0, 0); // antiparallel edge case
+          } else {
+            group.quaternion.setFromUnitVectors(up, dir);
+          }
+        }
+
+        arrowGroup.add(group);
+        arrowMeshGroups.push(group);
+      });
+
+      arrowGroup.rotation.copy(moleculeGroup.rotation);
+      arrowGroup.visible = (displayMode === 'quiver' || displayMode === 'both');
+    }
+
+    function updateArrowPositions() {
+      atomMeshes.forEach((mesh, i) => {
+        if (arrowMeshGroups[i]) arrowMeshGroups[i].position.copy(mesh.position);
+      });
+    }
+
     // === 6. ANIMATION LOOP ===
     // === 7. UI / EVENT HANDLERS ===
 
