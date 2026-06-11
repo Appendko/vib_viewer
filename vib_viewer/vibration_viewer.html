@@ -81,6 +81,7 @@
     .slider-label { font-size: 0.78rem; color: #9ca3af; width: 72px; flex-shrink: 0; }
     .slider-row input[type=range] { flex: 1; accent-color: #3b82f6; }
     .slider-val { font-size: 0.75rem; color: #6b7280; width: 30px; text-align: right; }
+    .slider-row.disabled { opacity: 0.4; pointer-events: none; }
     .checkbox-row { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; color: #9ca3af; margin-top: 4px; }
     .checkbox-row input[type=checkbox] { accent-color: #3b82f6; }
     /* ── Advanced Panel ── */
@@ -143,10 +144,15 @@
         <button class="disp-btn" data-mode="quiver">Quiver</button>
         <button class="disp-btn" data-mode="both">Both</button>
       </div>
-      <div class="slider-row">
+      <div class="slider-row" id="amplitude-row">
         <span class="slider-label">Amplitude</span>
         <input type="range" id="amplitude-slider" min="0" max="3" step="0.05" value="1.0">
         <span class="slider-val" id="amplitude-val">1.0</span>
+      </div>
+      <div class="slider-row disabled" id="arrow-len-row">
+        <span class="slider-label">Arrow len</span>
+        <input type="range" id="arrow-len-slider" min="0.5" max="6.0" step="0.1" value="3.0">
+        <span class="slider-val" id="arrow-len-val">3.0</span>
       </div>
       <div class="slider-row">
         <span class="slider-label">Ball size</span>
@@ -556,7 +562,7 @@
 
     // === 5. ARROW RENDERING ===
 
-    const MAX_ARROW_LEN  = 3.0;  // scene units for the longest arrow in a mode
+    let arrowLength      = 3.0;  // scene units for the longest arrow in a mode
     const MIN_DISP_FRAC  = 0.01; // hide arrows below 1% of mode max displacement
     const ARROW_COLOR    = 0x00FFAA;
 
@@ -581,7 +587,7 @@
 
         const frac = mags[i] / maxMag;
         if (frac >= MIN_DISP_FRAC) {
-          const totalLen  = MAX_ARROW_LEN * frac;
+          const totalLen  = arrowLength * frac;
           const shaftLen  = totalLen * 0.78;
           const headLen   = totalLen * 0.22;
           const shaftR    = 0.055;
@@ -726,6 +732,30 @@
       amplitudeVal.textContent = amplitude.toFixed(2);
     });
 
+    // Arrow length slider
+    const arrowLenSlider = document.getElementById('arrow-len-slider');
+    const arrowLenVal    = document.getElementById('arrow-len-val');
+    arrowLenSlider.addEventListener('input', () => {
+      arrowLength = parseFloat(arrowLenSlider.value);
+      arrowLenVal.textContent = arrowLength.toFixed(1);
+      if (currentMoleculeData && currentMode) buildArrows(currentMoleculeData.atoms, currentMode);
+    });
+
+    function updateSliderStates() {
+      const ampRow   = document.getElementById('amplitude-row');
+      const arrowRow = document.getElementById('arrow-len-row');
+      if (displayMode === 'quiver') {
+        ampRow.classList.add('disabled');
+        arrowRow.classList.remove('disabled');
+      } else if (displayMode === 'animation') {
+        ampRow.classList.remove('disabled');
+        arrowRow.classList.add('disabled');
+      } else { // 'both'
+        ampRow.classList.remove('disabled');
+        arrowRow.classList.remove('disabled');
+      }
+    }
+
     // === 7. UI / EVENT HANDLERS ===
 
     let sortMode = 'index'; // 'index' | 'freq'
@@ -799,6 +829,7 @@
         } else {
           arrowGroup.visible = false;
         }
+        updateSliderStates();
         // Reset atom positions to equilibrium when switching away from animation
         if (currentMoleculeData && currentMode) {
           atomMeshes.forEach((mesh, i) => {
@@ -970,13 +1001,14 @@
     window.onload = function () {
       initScene();
       animate();
+      updateSliderStates();
 
       // Load example file on startup
-      fetch('../example/H2O_CN_MBH.log')
+      fetch('../example/CH2O.log')
         .then(r => r.ok ? r.text() : Promise.reject('fetch failed'))
         .then(text => {
           const data = parseGaussianLog(text);
-          loadMoleculeData(data, 'H2O_CN_MBH.log');
+          loadMoleculeData(data, 'CH2O.log');
         })
         .catch(() => {
           // Silently skip if fetch fails (e.g. opened via file:// — user loads manually)
