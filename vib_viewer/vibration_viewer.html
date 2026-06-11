@@ -255,6 +255,24 @@
       106:'Sg',107:'Bh',108:'Hs',109:'Mt'
     };
     // === 2. PARSERS ===
+
+    function parseJSON(text) {
+      const data = JSON.parse(text);
+      if (!data.atoms || !Array.isArray(data.atoms)) throw new Error('JSON missing atoms array');
+      if (!data.modes || !Array.isArray(data.modes)) throw new Error('JSON missing modes array');
+      data.atoms.forEach((a, i) => {
+        if (!a.element) throw new Error('Atom ' + i + ' missing element');
+        if (a.x === undefined || a.y === undefined || a.z === undefined)
+          throw new Error('Atom ' + i + ' missing coordinates');
+      });
+      data.modes.forEach((m, i) => {
+        if (!m.displacements || m.displacements.length !== data.atoms.length)
+          throw new Error('Mode ' + i + ' displacements length mismatch');
+      });
+      if (!data.title) data.title = 'Untitled';
+      return data;
+    }
+
     // === 3. SCENE SETUP ===
     // === 4. MOLECULE RENDERING ===
     // === 5. ARROW RENDERING ===
