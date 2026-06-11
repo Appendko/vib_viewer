@@ -451,6 +451,95 @@
     }
 
     // === 4. MOLECULE RENDERING ===
+
+    function detectBonds(atoms, tolerance) {
+      const bonds = [];
+      for (let i = 0; i < atoms.length; i++) {
+        for (let j = i + 1; j < atoms.length; j++) {
+          const ri = COVALENT_RADII[atoms[i].element] || COVALENT_RADII.DEFAULT;
+          const rj = COVALENT_RADII[atoms[j].element] || COVALENT_RADII.DEFAULT;
+          const dx = atoms[i].x - atoms[j].x;
+          const dy = atoms[i].y - atoms[j].y;
+          const dz = atoms[i].z - atoms[j].z;
+          const distSq = dx*dx + dy*dy + dz*dz;
+          const thresh = tolerance * (ri + rj);
+          if (distSq < thresh * thresh && distSq > 0.01) bonds.push([i, j]);
+        }
+      }
+      return bonds;
+    }
+
+    // Shared geometries — created once, reused across all atom/bond meshes
+    const _sphereGeo = new THREE.SphereGeometry(1, 32, 32);
+    const _cylGeo    = (() => { const g = new THREE.CylinderGeometry(1, 1, 1, 12); g.rotateX(Math.PI / 2); return g; })();
+
+    function renderMolecule(atoms, bonds) {
+      // Dispose existing meshes
+      while (moleculeGroup.children.length > 0) {
+        const c = moleculeGroup.children[0];
+        moleculeGroup.remove(c);
+        if (c.material) c.material.dispose();
+      }
+      atomMeshes = [];
+      bondMeshes = [];
+
+      // Cache per-element materials
+      const matCache = {};
+      const getAtomMat = elem => {
+        if (!matCache[elem]) {
+          matCache[elem] = new THREE.MeshStandardMaterial({
+            color: ELEMENT_COLORS[elem] || ELEMENT_COLORS.DEFAULT,
+            roughness: 0.35, metalness: 0.3
+          });
+        }
+        return matCache[elem];
+      };
+
+      // Atom spheres
+      atoms.forEach((atom, i) => {
+        const r = VDW_RADII[atom.element] || VDW_RADII.DEFAULT;
+        const mesh = new THREE.Mesh(_sphereGeo, getAtomMat(atom.element));
+        mesh.scale.setScalar(sticksOnly ? 0 : r * ballScale);
+        mesh.position.set(atom.x, atom.y, atom.z);
+        mesh.userData = { type: 'atom', atomIndex: i };
+        moleculeGroup.add(mesh);
+        atomMeshes.push(mesh);
+      });
+
+      // Bond cylinders
+      const bondMat = new THREE.MeshStandardMaterial({ color: 0x9ca3af, roughness: 0.4, metalness: 0.6 });
+      bonds.forEach(([i, j]) => {
+        const v1 = new THREE.Vector3(atoms[i].x, atoms[i].y, atoms[i].z);
+        const v2 = new THREE.Vector3(atoms[j].x, atoms[j].y, atoms[j].z);
+        const mesh = new THREE.Mesh(_cylGeo, bondMat);
+        setBondTransform(mesh, v1, v2);
+        moleculeGroup.add(mesh);
+        bondMeshes.push(mesh);
+      });
+
+      // Center camera
+      let maxDistSq = 0;
+      atoms.forEach(a => { const d = a.x*a.x + a.y*a.y + a.z*a.z; if (d > maxDistSq) maxDistSq = d; });
+      moleculeGroup.rotation.set(0, 0, 0);
+      arrowGroup.rotation.set(0, 0, 0);
+      camera.position.set(0, 0, Math.max(10, Math.sqrt(maxDistSq) * 2.5));
+      camera.lookAt(0, 0, 0);
+    }
+
+    function setBondTransform(mesh, v1, v2) {
+      const mid  = v1.clone().add(v2).multiplyScalar(0.5);
+      const dist = v1.distanceTo(v2);
+      const dir  = v2.clone().sub(v1).normalize();
+      mesh.position.copy(mid);
+      mesh.scale.set(stickRadius, stickRadius, dist);
+      const up = new THREE.Vector3(0, 0, 1);
+      if (Math.abs(dir.dot(up) + 1) < 0.0001) {
+        mesh.quaternion.set(1, 0, 0, 0); // 180° antiparallel edge case
+      } else {
+        mesh.quaternion.setFromUnitVectors(up, dir);
+      }
+    }
+
     // === 5. ARROW RENDERING ===
     // === 6. ANIMATION LOOP ===
     // === 7. UI / EVENT HANDLERS ===
