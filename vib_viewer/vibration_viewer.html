@@ -69,7 +69,7 @@
     .mode-freq { font-weight: 600; color: #e5e7eb; }
     .mode-meta { font-size: 0.73rem; color: #9ca3af; text-align: right; }
     /* ── Controls ── */
-    #controls { padding: 10px 12px; border-top: 1px solid #374151; }
+    #controls { padding: 10px 12px; border-top: 1px solid #374151; flex-shrink: 0; }
     .display-btns { display: flex; gap: 5px; margin-bottom: 10px; }
     .disp-btn {
       flex: 1; padding: 6px 4px; border: 1px solid #374151; border-radius: 6px;
@@ -88,6 +88,7 @@
       width: 100%; padding: 8px 12px; background: none; border: none;
       border-top: 1px solid #374151; color: #9ca3af; font-size: 0.8rem;
       text-align: left; cursor: pointer; display: flex; align-items: center; gap: 6px;
+      flex-shrink: 0;
     }
     #advanced-toggle:hover { color: #d1d5db; }
     #advanced-body { padding: 10px 12px; border-top: 1px solid #2d3748; display: none; }
