@@ -543,6 +543,92 @@
     // === 5. ARROW RENDERING ===
     // === 6. ANIMATION LOOP ===
     // === 7. UI / EVENT HANDLERS ===
+
+    let sortMode = 'index'; // 'index' | 'freq'
+
+    function populateModeList(modes) {
+      const list = document.getElementById('mode-list');
+      list.innerHTML = '';
+
+      const hasIntensity = modes.some(m => m.intensity !== undefined);
+      const sorted = [...modes].sort((a, b) =>
+        sortMode === 'freq' ? a.frequency - b.frequency : a.index - b.index
+      );
+
+      sorted.forEach(mode => {
+        const row = document.createElement('div');
+        row.className = 'mode-row';
+        row.dataset.index = mode.index;
+
+        const metaStr = hasIntensity
+          ? `m=${mode.reduced_mass.toFixed(2)}&nbsp;&nbsp;I=${mode.intensity.toFixed(1)}`
+          : `m=${mode.reduced_mass.toFixed(2)}`;
+
+        row.innerHTML = `
+          <span class="mode-idx">#${mode.index}</span>
+          <span class="mode-freq">${mode.frequency.toFixed(1)} cm&#x207B;&#xB9;</span>
+          <span class="mode-meta">${metaStr}</span>
+        `;
+        row.addEventListener('click', () => selectMode(mode));
+        list.appendChild(row);
+      });
+    }
+
+    function selectMode(mode) {
+      currentMode = mode;
+      animationTime = 0;
+      lastTimestamp = null;
+
+      // Update highlighted row
+      document.querySelectorAll('.mode-row').forEach(r => r.classList.remove('selected'));
+      const target = document.querySelector(`.mode-row[data-index="${mode.index}"]`);
+      if (target) {
+        target.classList.add('selected');
+        target.scrollIntoView({ block: 'nearest' });
+      }
+
+      buildArrows(currentMoleculeData.atoms, mode);
+    }
+
+    // Sort buttons
+    document.getElementById('sort-index-btn').addEventListener('click', () => {
+      sortMode = 'index';
+      document.getElementById('sort-index-btn').classList.add('active');
+      document.getElementById('sort-freq-btn').classList.remove('active');
+      if (currentMoleculeData) populateModeList(currentMoleculeData.modes);
+    });
+    document.getElementById('sort-freq-btn').addEventListener('click', () => {
+      sortMode = 'freq';
+      document.getElementById('sort-freq-btn').classList.add('active');
+      document.getElementById('sort-index-btn').classList.remove('active');
+      if (currentMoleculeData) populateModeList(currentMoleculeData.modes);
+    });
+
+    // Display mode buttons
+    document.querySelectorAll('.disp-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        displayMode = btn.dataset.mode;
+        document.querySelectorAll('.disp-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        if (displayMode === 'quiver' || displayMode === 'both') {
+          arrowGroup.visible = true;
+        } else {
+          arrowGroup.visible = false;
+        }
+        // Reset atom positions to equilibrium when switching away from animation
+        if (currentMoleculeData && currentMode) {
+          atomMeshes.forEach((mesh, i) => {
+            const a = currentMoleculeData.atoms[i];
+            mesh.position.set(a.x, a.y, a.z);
+          });
+          currentBonds.forEach(([i, j], idx) => {
+            setBondTransform(bondMeshes[idx],
+              atomMeshes[i].position, atomMeshes[j].position);
+          });
+        }
+      });
+    });
+
   </script>
 </body>
 </html>
