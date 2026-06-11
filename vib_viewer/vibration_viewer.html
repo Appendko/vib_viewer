@@ -834,6 +834,75 @@
       if (currentMode) buildArrows(currentMoleculeData.atoms, currentMode);
     }
 
+    function loadMoleculeData(data, filename) {
+      currentMoleculeData = data;
+      currentMode = null;
+      animationTime = 0;
+      lastTimestamp = null;
+
+      // Center molecule at origin
+      const cx = data.atoms.reduce((s, a) => s + a.x, 0) / data.atoms.length;
+      const cy = data.atoms.reduce((s, a) => s + a.y, 0) / data.atoms.length;
+      const cz = data.atoms.reduce((s, a) => s + a.z, 0) / data.atoms.length;
+      data.atoms.forEach(a => { a.x -= cx; a.y -= cy; a.z -= cz; });
+
+      // Bonds: use explicit bonds from JSON if present, else auto-detect
+      defaultBonds = data.bonds ? data.bonds : detectBonds(data.atoms, bondTolerance);
+      currentBonds = defaultBonds.slice();
+      updateBondTextarea(currentBonds);
+
+      renderMolecule(data.atoms, currentBonds);
+      populateModeList(data.modes);
+      document.getElementById('file-name').textContent = filename;
+
+      // Auto-select first mode
+      if (data.modes.length > 0) selectMode(data.modes[0]);
+    }
+
+    function handleFile(file) {
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const data = parseFile(e.target.result, file.name);
+          loadMoleculeData(data, file.name);
+        } catch (err) {
+          alert('Error loading file: ' + err.message);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // File input button
+    document.getElementById('file-input').addEventListener('change', e => {
+      if (e.target.files.length > 0) handleFile(e.target.files[0]);
+    });
+
+    // Drag & drop
+    const overlay = document.getElementById('drop-overlay');
+    window.addEventListener('dragover',  e => { e.preventDefault(); overlay.classList.add('active'); });
+    window.addEventListener('dragleave', e => { e.preventDefault(); overlay.classList.remove('active'); });
+    window.addEventListener('drop', e => {
+      e.preventDefault();
+      overlay.classList.remove('active');
+      if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
+    });
+
+    window.onload = function () {
+      initScene();
+      animate();
+
+      // Load example file on startup
+      fetch('../example/H2O_CN_MBH.log')
+        .then(r => r.ok ? r.text() : Promise.reject('fetch failed'))
+        .then(text => {
+          const data = parseGaussianLog(text);
+          loadMoleculeData(data, 'H2O_CN_MBH.log');
+        })
+        .catch(() => {
+          // Silently skip if fetch fails (e.g. opened via file:// — user loads manually)
+        });
+    };
+
   </script>
 </body>
 </html>
