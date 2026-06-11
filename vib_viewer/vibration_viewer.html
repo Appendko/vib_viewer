@@ -782,6 +782,58 @@
       });
     }
 
+    // Advanced panel toggle
+    const advToggle = document.getElementById('advanced-toggle');
+    const advBody   = document.getElementById('advanced-body');
+    advToggle.addEventListener('click', () => {
+      advBody.classList.toggle('open');
+      advToggle.textContent = advBody.classList.contains('open') ? '▾ Advanced' : '▸ Advanced';
+    });
+
+    // Tolerance slider — regenerates default bonds in real time
+    const toleranceSlider = document.getElementById('tolerance-slider');
+    const toleranceVal    = document.getElementById('tolerance-val');
+    toleranceSlider.addEventListener('input', () => {
+      bondTolerance = parseFloat(toleranceSlider.value);
+      toleranceVal.textContent = bondTolerance.toFixed(2) + '×';
+      if (currentMoleculeData) {
+        defaultBonds = detectBonds(currentMoleculeData.atoms, bondTolerance);
+        updateBondTextarea(defaultBonds);
+        applyBonds(defaultBonds);
+      }
+    });
+
+    // Apply button — parse textarea and re-render bonds
+    document.getElementById('apply-bonds-btn').addEventListener('click', () => {
+      const textarea = document.getElementById('bond-list-textarea');
+      try {
+        const parsed = JSON.parse(textarea.value);
+        if (!Array.isArray(parsed)) throw new Error('Expected array');
+        applyBonds(parsed);
+        currentBonds = parsed;
+      } catch (e) {
+        alert('Invalid bond list JSON: ' + e.message);
+      }
+    });
+
+    // Restore Default — reset to auto-detected bonds
+    document.getElementById('restore-bonds-btn').addEventListener('click', () => {
+      currentBonds = defaultBonds.slice();
+      updateBondTextarea(currentBonds);
+      applyBonds(currentBonds);
+    });
+
+    function updateBondTextarea(bonds) {
+      document.getElementById('bond-list-textarea').value = JSON.stringify(bonds);
+    }
+
+    function applyBonds(bonds) {
+      currentBonds = bonds;
+      if (!currentMoleculeData) return;
+      renderMolecule(currentMoleculeData.atoms, bonds);
+      if (currentMode) buildArrows(currentMoleculeData.atoms, currentMode);
+    }
+
   </script>
 </body>
 </html>
