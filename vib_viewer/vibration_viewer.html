@@ -745,6 +745,43 @@
       });
     });
 
+    // Ball size slider
+    const ballSlider = document.getElementById('ball-slider');
+    const ballVal    = document.getElementById('ball-val');
+    ballSlider.addEventListener('input', () => {
+      ballScale = parseFloat(ballSlider.value);
+      ballVal.textContent = ballScale.toFixed(2);
+      if (!sticksOnly) applyBallScale();
+    });
+
+    // Stick size slider
+    const stickSlider = document.getElementById('stick-slider');
+    const stickVal    = document.getElementById('stick-val');
+    stickSlider.addEventListener('input', () => {
+      stickRadius = parseFloat(stickSlider.value);
+      stickVal.textContent = stickRadius.toFixed(2);
+      bondMeshes.forEach(mesh => {
+        mesh.scale.x = stickRadius;
+        mesh.scale.y = stickRadius;
+      });
+    });
+
+    // Sticks only toggle
+    const sticksOnlyCb = document.getElementById('sticks-only-cb');
+    sticksOnlyCb.addEventListener('change', () => {
+      sticksOnly = sticksOnlyCb.checked;
+      ballSlider.disabled = sticksOnly;
+      applyBallScale();
+    });
+
+    function applyBallScale() {
+      atomMeshes.forEach((mesh, i) => {
+        const elem = currentMoleculeData ? currentMoleculeData.atoms[i].element : 'C';
+        const r = VDW_RADII[elem] || VDW_RADII.DEFAULT;
+        mesh.scale.setScalar(sticksOnly ? 0 : r * ballScale);
+      });
+    }
+
   </script>
 </body>
 </html>
