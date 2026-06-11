@@ -273,6 +273,106 @@
       return data;
     }
 
+    function parseGaussianLog(text) {
+      const lines = text.split('\n');
+
+      // ── Coordinates: last Standard orientation (fall back to Input orientation) ──
+      const atoms = [];
+      let orientIdx = -1;
+      for (let i = lines.length - 1; i >= 0; i--) {
+        if (lines[i].includes('Standard orientation:') || lines[i].includes('Input orientation:')) {
+          orientIdx = i; break;
+        }
+      }
+      if (orientIdx === -1) throw new Error('No orientation block found in log file');
+
+      // Skip: header line, dashes, col-name line 1, col-name line 2, dashes  (5 lines)
+      let i = orientIdx + 5;
+      while (i < lines.length) {
+        const line = lines[i].trim();
+        if (line.startsWith('---')) break;
+        const parts = line.split(/\s+/);
+        if (parts.length >= 6) {
+          const sym = AN_TO_SYMBOL[parseInt(parts[1])] || 'X';
+          atoms.push({ element: sym, x: parseFloat(parts[3]), y: parseFloat(parts[4]), z: parseFloat(parts[5]) });
+        }
+        i++;
+      }
+      if (atoms.length === 0) throw new Error('No atoms parsed from orientation block');
+
+      // ── Detect format variant ──
+      // Modified format: Frequencies -- values are sequential integers (1.0000, 2.0000, ...)
+      let isModified = false;
+      for (let j = 0; j < lines.length; j++) {
+        const t = lines[j].trim();
+        if (t.startsWith('Frequencies --')) {
+          const vals = t.split('--')[1].trim().split(/\s+/).map(Number);
+          isModified = vals.length > 0 && vals.every(v => Math.abs(v - Math.round(v)) < 0.001 && v >= 1);
+          break;
+        }
+      }
+
+      // ── Parse frequency blocks ──
+      const parseVals = line => line.split('--')[1].trim().split(/\s+/).map(Number);
+      const modes = [];
+      let j = 0;
+      while (j < lines.length) {
+        if (!lines[j].trim().startsWith('Frequencies --')) { j++; continue; }
+
+        const freqVals   = parseVals(lines[j]);
+        const redmVals   = parseVals(lines[j + 1]);
+        const frcVals    = parseVals(lines[j + 2]);
+        const intVals    = parseVals(lines[j + 3]);
+        const nModes     = freqVals.length;
+
+        const blockModes = freqVals.map((_, k) => ({
+          index:        isModified ? Math.round(freqVals[k]) : modes.length + k + 1,
+          frequency:    isModified ? intVals[k]              : freqVals[k],
+          reduced_mass: redmVals[k],
+          intensity:    isModified ? frcVals[k]              : intVals[k],
+          displacements: []
+        }));
+
+        // Advance to displacement table header line
+        j += 4;
+        while (j < lines.length && !lines[j].trim().startsWith('Atom')) j++;
+        j++; // skip the 'Atom AN X Y Z ...' header
+
+        let atomCount = 0;
+        while (j < lines.length && atomCount < atoms.length) {
+          const line = lines[j].trim();
+          if (!line || line.startsWith('Frequencies') || line.startsWith('---')) break;
+          const parts = line.split(/\s+/);
+          // Row layout: [atomIdx, AN, dx0, dy0, dz0,  dx1, dy1, dz1,  dx2, dy2, dz2]
+          if (parts.length >= 2 + nModes * 3) {
+            for (let k = 0; k < nModes; k++) {
+              blockModes[k].displacements.push({
+                dx: parseFloat(parts[2 + k * 3]),
+                dy: parseFloat(parts[3 + k * 3]),
+                dz: parseFloat(parts[4 + k * 3])
+              });
+            }
+            atomCount++;
+          }
+          j++;
+        }
+
+        // Only add fully parsed modes
+        blockModes.filter(m => m.displacements.length === atoms.length).forEach(m => modes.push(m));
+      }
+
+      if (modes.length === 0) throw new Error('No vibrational modes parsed from log file');
+
+      return { title: 'Gaussian Log', atoms, modes };
+    }
+
+    // Auto-detect format and dispatch
+    function parseFile(text, filename) {
+      const ext = filename.split('.').pop().toLowerCase();
+      if (ext === 'json') return parseJSON(text);
+      return parseGaussianLog(text); // .log, .out, or anything else
+    }
+
     // === 3. SCENE SETUP ===
     // === 4. MOLECULE RENDERING ===
     // === 5. ARROW RENDERING ===
