@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>XYZ Molecule Viewer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #111827; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            display: block;
+        }
+        #ui-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(31, 41, 55, 0.85); 
+            backdrop-filter: blur(8px);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid #374151;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            max-width: 340px;
+            color: #f9fafb;
+            z-index: 10;
+        }
+        h1 {
+            margin: 0 0 10px 0;
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #f3f4f6;
+        }
+        p {
+            margin: 0 0 15px 0;
+            font-size: 0.9rem;
+            color: #d1d5db;
+            line-height: 1.4;
+        }
+        .stats {
+            background: rgba(0,0,0,0.2);
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+        }
+        .stat-value {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #60a5fa;
+        }
+        .stat-label {
+            color: #9ca3af;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        
+        /* File Input Styling */
+        .upload-btn-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+        }
+        .btn {
+            border: 1px dashed #60a5fa;
+            color: #60a5fa;
+            background-color: rgba(96, 165, 250, 0.1);
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            text-align: center;
+            transition: all 0.2s;
+            box-sizing: border-box;
+        }
+        .btn:hover {
+            background-color: rgba(96, 165, 250, 0.2);
+        }
+        .upload-btn-wrapper input[type=file] {
+            font-size: 100px;
+            position: absolute;
+            left: 0;
+            top: 0;
+            opacity: 0;
+            cursor: pointer;
+            height: 100%;
+        }
+
+        #drop-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(17, 24, 39, 0.9);
+            color: #60a5fa;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2rem;
+            font-weight: bold;
+            z-index: 100;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+        #drop-overlay.active {
+            opacity: 1;
+        }
+        .instruction {
+            margin-top: 15px;
+            font-size: 0.8rem;
+            color: #9ca3af;
+            font-style: italic;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-panel">
+        <h1>XYZ Molecule Viewer</h1>
+        <p>Upload any standard <code>.xyz</code> file to render it instantly. The parser automatically generates bonds based on covalent radii.</p>
+        
+        <div class="stats">
+            <div class="stat-item">
+                <span class="stat-value" id="val-atoms">0</span>
+                <span class="stat-label">Atoms</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-value" id="val-bonds">0</span>
+                <span class="stat-label">Bonds</span>
+            </div>
+        </div>
+
+        <div class="upload-btn-wrapper">
+            <button class="btn">Click to Upload .xyz File</button>
+            <input type="file" id="file-input" accept=".xyz" />
+        </div>
+
+        <div class="instruction">
+            Or drag & drop a file anywhere.<br>
+            Click & drag to rotate • Scroll to zoom
+        </div>
+    </div>
+
+    <div id="drop-overlay">Drop .xyz file here</div>
+    <div id="canvas-container"></div>
+
+    <script>
+        // --- 1. ELEMENT DATA MAP ---
+        // Provides colors and covalent radii (in Angstroms) for bond calculations
+        const ELEMENT_DATA = {
+            'H':  { color: 0xffffff, radius: 0.32 },
+            'C':  { color: 0x1f2937, radius: 0.75 },
+            'N':  { color: 0x3b82f6, radius: 0.71 },
+            'O':  { color: 0xef4444, radius: 0.63 },
+            'S':  { color: 0xeab308, radius: 1.03 },
+            'F':  { color: 0x10b981, radius: 0.64 },
+            'Cl': { color: 0x10b981, radius: 0.99 },
+            'Br': { color: 0x991b1b, radius: 1.14 },
+            'I':  { color: 0x4c1d95, radius: 1.33 },
+            'P':  { color: 0xf97316, radius: 1.11 },
+            'DEFAULT': { color: 0xec4899, radius: 0.8 } // Pink for unknown elements
+        };
+
+        // --- 2. GLOBAL THREE.JS VARIABLES ---
+        let scene, camera, renderer, moleculeGroup;
+        let isUserInteracting = false;
+        const DEFAULT_BOND_COLOR = 0x9ca3af;
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 2000);
+            camera.position.set(0, 0, 15);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            container.appendChild(renderer.domElement);
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+            
+            const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.7);
+            dirLight1.position.set(10, 20, 15);
+            scene.add(dirLight1);
+
+            const dirLight2 = new THREE.DirectionalLight(0xaaccff, 0.3);
+            dirLight2.position.set(-10, -10, -15);
+            scene.add(dirLight2);
+
+            moleculeGroup = new THREE.Group();
+            scene.add(moleculeGroup);
+
+            setupInteraction();
+            setupFileHandlers();
+            
+            window.addEventListener('resize', onWindowResize, false);
+
+            // Load a default Benzene molecule on startup
+            const benzeneXYZ = `12\nBenzene Example\nC 0.0000 1.3970 0.0000\nC 1.2098 0.6985 0.0000\nC 1.2098 -0.6985 0.0000\nC 0.0000 -1.3970 0.0000\nC -1.2098 -0.6985 0.0000\nC -1.2098 0.6985 0.0000\nH 0.0000 2.4810 0.0000\nH 2.1486 1.2405 0.0000\nH 2.1486 -1.2405 0.0000\nH 0.0000 -2.4810 0.0000\nH -2.1486 -1.2405 0.0000\nH -2.1486 1.2405 0.0000`;
+            processXYZ(benzeneXYZ);
+        }
+
+        // --- 3. FILE PARSING & BOND LOGIC ---
+        function setupFileHandlers() {
+            const fileInput = document.getElementById('file-input');
+            const overlay = document.getElementById('drop-overlay');
+
+            // Button Upload
+            fileInput.addEventListener('change', (e) => {
+                if (e.target.files.length > 0) {
+                    readFile(e.target.files[0]);
+                }
+            });
+
+            // Drag & Drop
+            window.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                overlay.classList.add('active');
+            });
+            window.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                overlay.classList.remove('active');
+            });
+            window.addEventListener('drop', (e) => {
+                e.preventDefault();
+                overlay.classList.remove('active');
+                if (e.dataTransfer.files.length > 0) {
+                    readFile(e.dataTransfer.files[0]);
+                }
+            });
+        }
+
+        function readFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => processXYZ(e.target.result);
+            reader.readAsText(file);
+        }
+
+        function processXYZ(data) {
+            const lines = data.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+            if (lines.length < 3) return alert("Invalid XYZ file format");
+
+            const numAtoms = parseInt(lines[0]);
+            if (isNaN(numAtoms)) return alert("Invalid XYZ file format: missing atom count");
+
+            const atoms = [];
+            // Start reading from line 2 (skipping count and comment)
+            for (let i = 2; i < lines.length && atoms.length < numAtoms; i++) {
+                const parts = lines[i].split(/\s+/);
+                if (parts.length >= 4) {
+                    atoms.push({
+                        element: parts[0],
+                        pos: new THREE.Vector3(parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3]))
+                    });
+                }
+            }
+
+            // Center the molecule perfectly
+            let center = new THREE.Vector3();
+            atoms.forEach(a => center.add(a.pos));
+            center.divideScalar(atoms.length);
+            atoms.forEach(a => a.pos.sub(center));
+
+            // Calculate Max Radius for Camera Framing
+            let maxDistSq = 0;
+            atoms.forEach(a => {
+                const dSq = a.pos.lengthSq();
+                if (dSq > maxDistSq) maxDistSq = dSq;
+            });
+            const maxDist = Math.sqrt(maxDistSq);
+
+            // Calculate Bonds (O(N^2) search - efficient enough for typical XYZ up to ~5k atoms)
+            const bonds = [];
+            for (let i = 0; i < atoms.length; i++) {
+                for (let j = i + 1; j < atoms.length; j++) {
+                    const el1 = ELEMENT_DATA[atoms[i].element] || ELEMENT_DATA['DEFAULT'];
+                    const el2 = ELEMENT_DATA[atoms[j].element] || ELEMENT_DATA['DEFAULT'];
+                    
+                    const distSq = atoms[i].pos.distanceToSquared(atoms[j].pos);
+                    // Threshold: 1.25 times the sum of covalent radii
+                    const threshold = (el1.radius + el2.radius) * 1.25;
+                    
+                    if (distSq < threshold * threshold && distSq > 0.1) {
+                        bonds.push([i, j]);
+                    }
+                }
+            }
+
+            renderMolecule(atoms, bonds, maxDist);
+        }
+
+        // --- 4. 3D RENDERING ---
+        function renderMolecule(atoms, bonds, maxRadius) {
+            // Clear existing molecule
+            while(moleculeGroup.children.length > 0){ 
+                const child = moleculeGroup.children[0];
+                moleculeGroup.remove(child); 
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) child.material.dispose();
+            }
+
+            const atomGeo = new THREE.SphereGeometry(1, 32, 32);
+            const materials = {};
+
+            // Render Atoms
+            atoms.forEach(atom => {
+                const elData = ELEMENT_DATA[atom.element] || ELEMENT_DATA['DEFAULT'];
+                if (!materials[atom.element]) {
+                    materials[atom.element] = new THREE.MeshStandardMaterial({
+                        color: elData.color, roughness: 0.3, metalness: 0.4
+                    });
+                }
+                
+                const mesh = new THREE.Mesh(atomGeo, materials[atom.element]);
+                // Visual radius: scaling down covalent radius slightly for ball-and-stick look
+                mesh.scale.setScalar(elData.radius * 0.5); 
+                mesh.position.copy(atom.pos);
+                moleculeGroup.add(mesh);
+            });
+
+            // Render Bonds
+            const bondMat = new THREE.MeshStandardMaterial({ color: DEFAULT_BOND_COLOR, roughness: 0.4, metalness: 0.7 });
+            const cylinderGeo = new THREE.CylinderGeometry(0.12, 0.12, 1, 12);
+            // Reorient cylinder so it aligns with Z axis by default to make lookAt easier
+            cylinderGeo.rotateX(Math.PI / 2);
+
+            bonds.forEach(bond => {
+                const v1 = atoms[bond[0]].pos;
+                const v2 = atoms[bond[1]].pos;
+                const dist = v1.distanceTo(v2);
+
+                const mesh = new THREE.Mesh(cylinderGeo, bondMat);
+                mesh.position.copy(new THREE.Vector3().addVectors(v1, v2).multiplyScalar(0.5));
+                mesh.scale.set(1, 1, dist);
+                mesh.lookAt(v2);
+                
+                moleculeGroup.add(mesh);
+            });
+
+            // Adjust Camera and Reset Rotation
+            moleculeGroup.rotation.set(0, 0, 0);
+            camera.position.set(0, 0, Math.max(10, maxRadius * 2.5));
+            camera.lookAt(0, 0, 0);
+
+            // Update UI
+            document.getElementById('val-atoms').innerText = atoms.length;
+            document.getElementById('val-bonds').innerText = bonds.length;
+        }
+
+        // --- 5. INTERACTION & ANIMATION ---
+        function setupInteraction() {
+            let prevPos = { x: 0, y: 0 };
+            const handleStart = (e) => {
+                isUserInteracting = true;
+                prevPos.x = e.type.includes('mouse') ? e.offsetX : e.touches[0].clientX;
+                prevPos.y = e.type.includes('mouse') ? e.offsetY : e.touches[0].clientY;
+            };
+            const handleEnd = () => isUserInteracting = false;
+            const handleMove = (e) => {
+                if (!isUserInteracting) return;
+                const x = e.type.includes('mouse') ? e.offsetX : e.touches[0].clientX;
+                const y = e.type.includes('mouse') ? e.offsetY : e.touches[0].clientY;
+                moleculeGroup.rotation.y += (x - prevPos.x) * 0.008;
+                moleculeGroup.rotation.x += (y - prevPos.y) * 0.008;
+                prevPos = { x, y };
+            };
+
+            document.addEventListener('mousedown', handleStart);
+            document.addEventListener('mouseup', handleEnd);
+            document.addEventListener('mousemove', handleMove);
+            document.addEventListener('touchstart', handleStart, { passive: false });
+            document.addEventListener('touchend', handleEnd);
+            document.addEventListener('touchmove', handleMove, { passive: false });
+            
+            document.addEventListener('wheel', (e) => {
+                camera.position.z += e.deltaY * 0.05;
+                camera.position.z = Math.max(3, Math.min(camera.position.z, 200));
+            });
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (!isUserInteracting && moleculeGroup.children.length > 0) {
+                moleculeGroup.rotation.y += 0.002;
+                moleculeGroup.rotation.x += 0.001;
+            }
+            renderer.render(scene, camera);
+        }
+
+        window.onload = function() { init(); animate(); };
+    </script>
+</body>
+</html>
