@@ -608,6 +608,56 @@
     }
 
     // === 6. ANIMATION LOOP ===
+
+    const ANIM_PERIOD = 2.0; // seconds per oscillation cycle
+
+    function updateDisplay(t) {
+      if (!currentMode || !currentMoleculeData) return;
+
+      const offset = (displayMode === 'animation' || displayMode === 'both')
+        ? amplitude * Math.sin(2 * Math.PI * t / ANIM_PERIOD)
+        : 0;
+
+      // Update atom positions
+      atomMeshes.forEach((mesh, i) => {
+        const a = currentMoleculeData.atoms[i];
+        const d = currentMode.displacements[i];
+        mesh.position.set(a.x + offset * d.dx, a.y + offset * d.dy, a.z + offset * d.dz);
+      });
+
+      // Update bond positions when atoms have moved
+      if (displayMode === 'animation' || displayMode === 'both') {
+        currentBonds.forEach(([i, j], idx) => {
+          if (bondMeshes[idx]) setBondTransform(bondMeshes[idx], atomMeshes[i].position, atomMeshes[j].position);
+        });
+      }
+
+      // Update arrow positions in 'both' mode
+      if (displayMode === 'both') updateArrowPositions();
+    }
+
+    function animate(timestamp) {
+      requestAnimationFrame(animate);
+
+      if (lastTimestamp === null) lastTimestamp = timestamp;
+
+      if (!isUserInteracting && currentMode && (displayMode === 'animation' || displayMode === 'both')) {
+        animationTime += (timestamp - lastTimestamp) / 1000;
+      }
+      lastTimestamp = timestamp;
+
+      updateDisplay(animationTime);
+      renderer.render(scene, camera);
+    }
+
+    // Amplitude slider
+    const amplitudeSlider = document.getElementById('amplitude-slider');
+    const amplitudeVal    = document.getElementById('amplitude-val');
+    amplitudeSlider.addEventListener('input', () => {
+      amplitude = parseFloat(amplitudeSlider.value);
+      amplitudeVal.textContent = amplitude.toFixed(2);
+    });
+
     // === 7. UI / EVENT HANDLERS ===
 
     let sortMode = 'index'; // 'index' | 'freq'
