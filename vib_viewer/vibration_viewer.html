@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vibration Mode Viewer</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 0; overflow: hidden;
+      background: #111827;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #f9fafb;
+      display: flex; height: 100vh;
+    }
+    /* ── Left Panel ── */
+    #panel {
+      width: 300px; min-width: 300px;
+      background: #1f2937;
+      border-right: 1px solid #374151;
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    #panel-header {
+      padding: 16px 16px 10px;
+      border-bottom: 1px solid #374151;
+    }
+    #panel-header h1 { margin: 0 0 10px; font-size: 1.1rem; font-weight: 600; color: #f3f4f6; }
+    .upload-area {
+      border: 1px dashed #4b5563;
+      border-radius: 8px;
+      padding: 10px;
+      text-align: center;
+      cursor: pointer;
+      font-size: 0.85rem;
+      color: #9ca3af;
+      position: relative;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .upload-area:hover { border-color: #60a5fa; background: rgba(96,165,250,0.05); }
+    .upload-area input[type=file] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    #file-name { margin-top: 4px; font-size: 0.75rem; color: #6b7280; min-height: 1em; }
+    /* ── Mode List ── */
+    #mode-list-section { display: flex; flex-direction: column; flex: 1; overflow: hidden; padding: 8px 12px 0; }
+    .sort-bar { display: flex; gap: 6px; margin-bottom: 6px; }
+    .sort-btn {
+      flex: 1; padding: 5px; border: 1px solid #374151; border-radius: 6px;
+      background: #374151; color: #d1d5db; font-size: 0.8rem; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .sort-btn.active { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+    #mode-list {
+      flex: 1; overflow-y: auto; border-radius: 6px;
+      border: 1px solid #374151;
+    }
+    .mode-row {
+      padding: 7px 10px; cursor: pointer; border-bottom: 1px solid #1f2937;
+      font-size: 0.82rem; display: grid;
+      grid-template-columns: 2rem 1fr auto;
+      gap: 4px; align-items: center;
+      transition: background 0.1s;
+    }
+    .mode-row:hover { background: #2d3748; }
+    .mode-row.selected { background: #1d4ed8; }
+    .mode-idx { color: #9ca3af; font-size: 0.75rem; }
+    .mode-freq { font-weight: 600; color: #e5e7eb; }
+    .mode-meta { font-size: 0.73rem; color: #9ca3af; text-align: right; }
+    /* ── Controls ── */
+    #controls { padding: 10px 12px; border-top: 1px solid #374151; }
+    .display-btns { display: flex; gap: 5px; margin-bottom: 10px; }
+    .disp-btn {
+      flex: 1; padding: 6px 4px; border: 1px solid #374151; border-radius: 6px;
+      background: #374151; color: #d1d5db; font-size: 0.8rem; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .disp-btn.active { background: #059669; border-color: #059669; color: #fff; }
+    .slider-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .slider-label { font-size: 0.78rem; color: #9ca3af; width: 72px; flex-shrink: 0; }
+    .slider-row input[type=range] { flex: 1; accent-color: #3b82f6; }
+    .slider-val { font-size: 0.75rem; color: #6b7280; width: 30px; text-align: right; }
+    .checkbox-row { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; color: #9ca3af; margin-top: 4px; }
+    .checkbox-row input[type=checkbox] { accent-color: #3b82f6; }
+    /* ── Advanced Panel ── */
+    #advanced-toggle {
+      width: 100%; padding: 8px 12px; background: none; border: none;
+      border-top: 1px solid #374151; color: #9ca3af; font-size: 0.8rem;
+      text-align: left; cursor: pointer; display: flex; align-items: center; gap: 6px;
+    }
+    #advanced-toggle:hover { color: #d1d5db; }
+    #advanced-body { padding: 10px 12px; border-top: 1px solid #2d3748; display: none; }
+    #advanced-body.open { display: block; }
+    .adv-label { font-size: 0.78rem; color: #9ca3af; margin-bottom: 4px; margin-top: 8px; }
+    #bond-list-textarea {
+      width: 100%; height: 80px; background: #111827; border: 1px solid #374151;
+      border-radius: 6px; color: #d1d5db; font-size: 0.75rem; font-family: monospace;
+      padding: 6px; resize: vertical;
+    }
+    .adv-btns { display: flex; gap: 6px; margin-top: 6px; }
+    .adv-btn {
+      flex: 1; padding: 5px; border: 1px solid #374151; border-radius: 6px;
+      background: #374151; color: #d1d5db; font-size: 0.78rem; cursor: pointer;
+    }
+    .adv-btn:hover { background: #4b5563; }
+    /* ── Canvas ── */
+    #canvas-container { flex: 1; position: relative; }
+    #drop-overlay {
+      position: fixed; inset: 0;
+      background: rgba(17,24,39,0.9); color: #60a5fa;
+      display: flex; justify-content: center; align-items: center;
+      font-size: 2rem; font-weight: bold; z-index: 100;
+      opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    }
+    #drop-overlay.active { opacity: 1; }
+  </style>
+</head>
+<body>
+
+  <div id="panel">
+    <div id="panel-header">
+      <h1>Vibration Viewer</h1>
+      <div class="upload-area">
+        Click or drop .log / .json
+        <input type="file" id="file-input" accept=".log,.out,.json">
+      </div>
+      <div id="file-name"></div>
+    </div>
+
+    <div id="mode-list-section">
+      <div class="sort-bar">
+        <button class="sort-btn active" id="sort-index-btn">Index</button>
+        <button class="sort-btn" id="sort-freq-btn">Freq</button>
+      </div>
+      <div id="mode-list"></div>
+    </div>
+
+    <div id="controls">
+      <div class="display-btns">
+        <button class="disp-btn active" data-mode="animation">Anim</button>
+        <button class="disp-btn" data-mode="quiver">Quiver</button>
+        <button class="disp-btn" data-mode="both">Both</button>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Amplitude</span>
+        <input type="range" id="amplitude-slider" min="0" max="3" step="0.05" value="1.0">
+        <span class="slider-val" id="amplitude-val">1.0</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Ball size</span>
+        <input type="range" id="ball-slider" min="0.1" max="1.0" step="0.05" value="0.4">
+        <span class="slider-val" id="ball-val">0.4</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Stick size</span>
+        <input type="range" id="stick-slider" min="0.02" max="0.3" step="0.01" value="0.12">
+        <span class="slider-val" id="stick-val">0.12</span>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="sticks-only-cb">
+        <label for="sticks-only-cb">Sticks only</label>
+      </div>
+    </div>
+
+    <button id="advanced-toggle">▸ Advanced</button>
+    <div id="advanced-body">
+      <div class="adv-label">Bond tolerance</div>
+      <div class="slider-row">
+        <input type="range" id="tolerance-slider" min="0.8" max="1.8" step="0.05" value="1.25">
+        <span class="slider-val" id="tolerance-val">1.25×</span>
+      </div>
+      <div class="adv-label">Bond list (JSON)</div>
+      <textarea id="bond-list-textarea" spellcheck="false"></textarea>
+      <div class="adv-btns">
+        <button class="adv-btn" id="apply-bonds-btn">Apply</button>
+        <button class="adv-btn" id="restore-bonds-btn">Restore Default</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="drop-overlay">Drop .log or .json file here</div>
+  <div id="canvas-container"></div>
+
+  <script>
+    // === 1. ELEMENT DATA ===
+    // === 2. PARSERS ===
+    // === 3. SCENE SETUP ===
+    // === 4. MOLECULE RENDERING ===
+    // === 5. ARROW RENDERING ===
+    // === 6. ANIMATION LOOP ===
+    // === 7. UI / EVENT HANDLERS ===
+  </script>
+</body>
+</html>
