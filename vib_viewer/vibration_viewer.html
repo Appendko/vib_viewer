@@ -2373,12 +2373,7 @@
       offCanvas.width = W; offCanvas.height = H;
       const offCtx = offCanvas.getContext('2d');
 
-      // Solid background fill — matches viewer background, avoids any color-key collision.
-      // (Using a transparent color key like 0xFF00FF causes holes at antialiased edges of
-      // red atoms, and 0x000000 would hole out shadows/bonds. Solid fill is the clean fix.)
-      const BG = '#111827';
-
-      const encoder = new GIF({ workers: 2, quality: 8, width: W, height: H, workerScript: workerUrl });
+      const encoder = new GIF({ workers: 2, quality: 8, width: W, height: H, workerScript: workerUrl, transparent: 0xFF00FF });
 
       encoder.on('progress', p => { btn.textContent = `Encoding ${Math.round(p * 100)}%`; });
       encoder.on('finished', blob => {
@@ -2400,9 +2395,20 @@
         updateDisplay(animationTime);
         renderer.render(scene, camera);
 
-        offCtx.fillStyle = BG;
-        offCtx.fillRect(0, 0, W, H);
+        // Use the WebGL alpha channel to identify background — not color matching.
+        // Three.js renders geometry as alpha=255, background as alpha=0 (alpha:true canvas).
+        // This means the oxygen specular highlight (near-magenta but alpha=255) is kept
+        // as-is; only truly empty pixels get the transparent key color.
+        offCtx.clearRect(0, 0, W, H);
         offCtx.drawImage(renderer.domElement, 0, 0, W, H);
+        const imgData = offCtx.getImageData(0, 0, W, H);
+        const px = imgData.data;
+        for (let j = 0; j < px.length; j += 4) {
+          if (px[j + 3] < 255) {
+            px[j] = 0xFF; px[j+1] = 0x00; px[j+2] = 0xFF; px[j+3] = 0xFF;
+          }
+        }
+        offCtx.putImageData(imgData, 0, 0);
         // disposal:2 = restore-to-background before next frame (no inter-frame ghosting)
         encoder.addFrame(offCtx, { copy: true, delay: DELAY, disposal: 2 });
 
