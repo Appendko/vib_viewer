@@ -165,8 +165,8 @@
     <div id="panel-header">
       <h1>Vibration Viewer</h1>
       <div class="upload-area">
-        Click or drop .log / .json
-        <input type="file" id="file-input" accept=".log,.out,.json">
+        Click or drop .log / .json / .cjson
+        <input type="file" id="file-input" accept=".log,.out,.json,.cjson">
       </div>
       <div id="file-name"></div>
     </div>
@@ -250,7 +250,7 @@
     </div>
   </div>
 
-  <div id="drop-overlay">Drop .log or .json file here</div>
+  <div id="drop-overlay">Drop .log / .json / .cjson file here</div>
   <div id="canvas-container">
     <div id="spectrum-panel">
       <div id="spectrum-header">
@@ -448,10 +448,85 @@
       return { title: 'Gaussian Log', atoms, modes };
     }
 
+    function parseCJSON(text) {
+      const d = JSON.parse(text);
+      if (!d.atoms) throw new Error('CJSON missing atoms');
+      if (!d.atoms.coords || !d.atoms.coords['3d'])
+        throw new Error('CJSON missing atoms.coords["3d"]');
+
+      // Element symbols — prefer symbol array, fall back to atomic numbers
+      let symbols;
+      if (d.atoms.elements) {
+        if (d.atoms.elements.symbol)
+          symbols = d.atoms.elements.symbol;
+        else if (d.atoms.elements.number)
+          symbols = d.atoms.elements.number.map(n => AN_TO_SYMBOL[n] || 'X');
+      }
+      if (!symbols || symbols.length === 0)
+        throw new Error('CJSON missing atoms.elements.symbol or .number');
+
+      const c = d.atoms.coords['3d'];
+      if (c.length !== symbols.length * 3)
+        throw new Error('CJSON coords length does not match atom count');
+
+      const atoms = symbols.map((el, i) => ({
+        element: el, x: c[i*3], y: c[i*3+1], z: c[i*3+2]
+      }));
+
+      // Vibrations
+      const vib = d.vibrations;
+      if (!vib || !vib.frequencies || vib.frequencies.length === 0)
+        throw new Error('CJSON has no vibrational data — run a frequency calculation first');
+
+      const eigVecs = vib.eigenVectors || vib.modes;
+      if (!eigVecs)
+        throw new Error('CJSON missing vibrations.eigenVectors or vibrations.modes');
+
+      const redMasses = vib.reducedMasses || null;
+      const intensities = vib.intensities || null;
+
+      const modes = vib.frequencies.map((freq, k) => {
+        const flat = eigVecs[k];
+        if (!flat || flat.length !== atoms.length * 3)
+          throw new Error(`CJSON mode ${k+1} eigenVector length mismatch`);
+        const mode = {
+          index: k + 1,
+          frequency: freq,
+          reduced_mass: redMasses ? redMasses[k] : 1.0,
+          displacements: atoms.map((_, i) => ({
+            dx: flat[i*3], dy: flat[i*3+1], dz: flat[i*3+2]
+          }))
+        };
+        if (intensities && intensities[k] != null) mode.intensity = intensities[k];
+        return mode;
+      });
+
+      // Bonds — convert flat index pairs [[0,1],[1,2],...] to our format
+      let bonds;
+      if (d.bonds && d.bonds.connections && d.bonds.connections.index) {
+        const idx = d.bonds.connections.index;
+        bonds = [];
+        for (let i = 0; i < idx.length - 1; i += 2) bonds.push([idx[i], idx[i+1]]);
+      }
+
+      const result = { title: d.name || 'CJSON', atoms, modes };
+      if (bonds) result.bonds = bonds;
+      return result;
+    }
+
     // Auto-detect format and dispatch
     function parseFile(text, filename) {
       const ext = filename.split('.').pop().toLowerCase();
-      if (ext === 'json') return parseJSON(text);
+      if (ext === 'cjson') return parseCJSON(text);
+      if (ext === 'json') {
+        // Sniff for CJSON by key presence before falling back to our schema
+        try {
+          const sniff = JSON.parse(text);
+          if (sniff.chemicalJson !== undefined || sniff.vibrations !== undefined)
+            return parseCJSON(text);
+        } catch (e) {}
+        return parseJSON(text);
+      }
       return parseGaussianLog(text); // .log, .out, or anything else
     }
 
