@@ -1817,23 +1817,6 @@
       lastTimestamp = timestamp;
       updateDisplay(animationTime);
       renderer.render(scene, camera);
-      if (isRecording) {
-        if (gifRecordStart === null) gifRecordStart = timestamp;
-        const frameIdx = Math.floor((timestamp - gifRecordStart) / 1000 * gifFPS);
-        if (frameIdx >= gifFramesCaptured && gifFramesCaptured < gifFramesTotal) {
-          gifOffCtx.fillStyle = '#FF00FF';
-          gifOffCtx.fillRect(0, 0, gifOffCanvas.width, gifOffCanvas.height);
-          gifOffCtx.drawImage(renderer.domElement, 0, 0, gifOffCanvas.width, gifOffCanvas.height);
-          gifEncoder.addFrame(gifOffCtx, { copy: true, delay: Math.round(1000 / gifFPS) });
-          gifFramesCaptured++;
-          document.getElementById('gif-btn').textContent = `Capturing ${gifFramesCaptured}/${gifFramesTotal}`;
-        }
-        if (gifFramesCaptured >= gifFramesTotal) {
-          isRecording = false;
-          document.getElementById('gif-btn').textContent = 'Encoding…';
-          gifEncoder.render();
-        }
-      }
     }
 
     // === 9. UI / EVENT HANDLERS ===
@@ -2353,48 +2336,84 @@
 
     // ── GIF recorder ──
     let _gifWorkerUrl = null;
-    let isRecording = false, gifFPS = 15, gifFramesTotal = 0, gifFramesCaptured = 0;
-    let gifRecordStart = null, gifOffCanvas = null, gifOffCtx = null, gifEncoder = null;
+    let isRecording = false;
 
     async function ensureGifWorker() {
       if (_gifWorkerUrl) return _gifWorkerUrl;
       const resp = await fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js');
       if (!resp.ok) throw new Error('Could not fetch gif.js worker');
-      _gifWorkerUrl = URL.createObjectURL(await resp.blob());
+      // Fetch as text → explicit Blob type, same as vib_viewer_control
+      const code = await resp.text();
+      _gifWorkerUrl = URL.createObjectURL(new Blob([code], { type: 'application/javascript' }));
       return _gifWorkerUrl;
     }
 
     async function recordGIF() {
       if (!currentMode) { alert('Select a vibration mode first.'); return; }
       if (isRecording) return;
+      if (displayMode === 'quiver') { alert('Switch to Animate or Both mode first.'); return; }
+
       const btn    = document.getElementById('gif-btn');
       const status = document.getElementById('gif-status');
       const fps    = Math.max(5, Math.min(30, parseInt(document.getElementById('gif-fps').value) || 15));
       const cycles = Math.max(1, Math.min(5,  parseInt(document.getElementById('gif-cycles').value) || 1));
       const spcPct = parseFloat(document.getElementById('gif-size-sel').value) || 0.5;
+
       btn.disabled = true; btn.textContent = 'Setting up…'; status.textContent = '';
       let workerUrl;
       try { workerUrl = await ensureGifWorker(); }
       catch (e) { alert('Failed to load gif.js worker: ' + e.message); btn.disabled = false; btn.textContent = 'Record GIF'; return; }
-      const W = Math.max(1, Math.round(renderer.domElement.width  * spcPct));
-      const H = Math.max(1, Math.round(renderer.domElement.height * spcPct));
-      gifFPS = fps; gifFramesTotal = Math.round(fps * ANIM_PERIOD * cycles);
-      gifFramesCaptured = 0; gifRecordStart = null;
-      gifOffCanvas = document.createElement('canvas'); gifOffCanvas.width = W; gifOffCanvas.height = H;
-      gifOffCtx = gifOffCanvas.getContext('2d');
-      gifEncoder = new GIF({ workers: 2, quality: 10, width: W, height: H, workerScript: workerUrl, transparent: 0xFF00FF });
-      gifEncoder.on('progress', p => { btn.textContent = `Encoding ${Math.round(p*100)}%`; });
-      gifEncoder.on('finished', blob => {
+
+      const W      = Math.max(1, Math.round(renderer.domElement.width  * spcPct));
+      const H      = Math.max(1, Math.round(renderer.domElement.height * spcPct));
+      const FRAMES = Math.round(fps * ANIM_PERIOD * cycles);
+      const DELAY  = Math.round(1000 / fps);
+
+      const offCanvas = document.createElement('canvas');
+      offCanvas.width = W; offCanvas.height = H;
+      const offCtx = offCanvas.getContext('2d');
+
+      // Solid background fill — matches viewer background, avoids any color-key collision.
+      // (Using a transparent color key like 0xFF00FF causes holes at antialiased edges of
+      // red atoms, and 0x000000 would hole out shadows/bonds. Solid fill is the clean fix.)
+      const BG = '#111827';
+
+      const encoder = new GIF({ workers: 2, quality: 8, width: W, height: H, workerScript: workerUrl });
+
+      encoder.on('progress', p => { btn.textContent = `Encoding ${Math.round(p * 100)}%`; });
+      encoder.on('finished', blob => {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url; a.download = `mode${currentMode.index}_${Math.round(currentMode.frequency)}cm-1.gif`;
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        status.textContent = `Saved (${(blob.size/1024).toFixed(0)} KB, ${W}×${H}px)`;
+        status.textContent = `Saved (${(blob.size / 1024).toFixed(0)} KB, ${W}×${H}px)`;
         btn.disabled = false; btn.textContent = 'Record GIF';
       });
-      btn.disabled = false; btn.textContent = `Capturing 0/${gifFramesTotal}`;
+
       isRecording = true;
+      const savedAnimTime = animationTime;
+
+      for (let i = 0; i < FRAMES; i++) {
+        // Exact phase — evenly spaced, guaranteed perfect loop
+        animationTime = (i / FRAMES) * ANIM_PERIOD;
+        updateDisplay(animationTime);
+        renderer.render(scene, camera);
+
+        offCtx.fillStyle = BG;
+        offCtx.fillRect(0, 0, W, H);
+        offCtx.drawImage(renderer.domElement, 0, 0, W, H);
+        // disposal:2 = restore-to-background before next frame (no inter-frame ghosting)
+        encoder.addFrame(offCtx, { copy: true, delay: DELAY, disposal: 2 });
+
+        btn.textContent = `Capturing ${i + 1}/${FRAMES}`;
+        await new Promise(r => setTimeout(r, 0));  // yield — keeps UI responsive
+      }
+
+      animationTime = savedAnimTime;
+      isRecording = false;
+      btn.textContent = 'Encoding…';
+      encoder.render();
     }
     document.getElementById('gif-btn').addEventListener('click', recordGIF);
 
