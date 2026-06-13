@@ -618,10 +618,195 @@
       return { title: 'ORCA Output', atoms, modes };
     }
 
+    function parseORCAHess(text) {
+      const BOHR = 0.529177210903;
+      const lines = text.split('\n');
+      const sec = key => lines.findIndex(l => l.trim() === key);
+
+      // $atoms — symbol, mass(AMU), x y z (Bohr)
+      const aStart = sec('$atoms');
+      if (aStart < 0) throw new Error('ORCA hess: no $atoms section');
+      const nAtoms = parseInt(lines[aStart + 1]);
+      const atoms = [], atomMasses = [];
+      for (let i = 0; i < nAtoms; i++) {
+        const m = lines[aStart + 2 + i]
+          .match(/^\s*([A-Za-z]+)\s+([\d.]+)\s+([-\d.eE+]+)\s+([-\d.eE+]+)\s+([-\d.eE+]+)/);
+        if (!m) throw new Error(`ORCA hess: cannot parse atom ${i}`);
+        atoms.push({ element: m[1], x: +m[3] * BOHR, y: +m[4] * BOHR, z: +m[5] * BOHR });
+        atomMasses.push(+m[2]);
+      }
+      const nDOF = nAtoms * 3;
+
+      // $vibrational_frequencies — idx freq(cm⁻¹)
+      const fStart = sec('$vibrational_frequencies');
+      if (fStart < 0) throw new Error('ORCA hess: no $vibrational_frequencies section');
+      const nFreqs = parseInt(lines[fStart + 1]);
+      const allFreqs = [];
+      for (let i = 0; i < nFreqs; i++) {
+        const m = lines[fStart + 2 + i].match(/^\s*(\d+)\s+([-\d.eE+]+)/);
+        if (m) allFreqs.push({ idx: +m[1], freq: +m[2] });
+      }
+      const nModes = allFreqs.length;
+
+      // $normal_modes — same block-table format as .out, but with E-notation floats
+      const nmStart = sec('$normal_modes');
+      if (nmStart < 0) throw new Error('ORCA hess: no $normal_modes section');
+
+      const modeMat = Array.from({ length: nDOF }, () => Array(nModes).fill(0));
+      const reHdr = /^\s{8,}(\d+(?:\s+\d+)+)\s*$/;
+      const reRow = /^\s{1,7}(\d+)\s+([-\d.eE+]+(?:\s+[-\d.eE+]+)*)/;
+
+      let j = nmStart + 2; // skip "NROW NCOL" line
+      while (j < lines.length) {
+        if (lines[j].startsWith('$')) break;
+        const hm = lines[j].match(reHdr);
+        if (hm) {
+          const cols = hm[1].trim().split(/\s+/).map(Number);
+          j++;
+          for (; j < lines.length; j++) {
+            const rm = lines[j].match(reRow);
+            if (!rm) break;
+            const dof = +rm[1];
+            const vals = rm[2].trim().split(/\s+/).map(Number);
+            cols.forEach((mi, k) => {
+              if (dof < nDOF && mi < nModes && k < vals.length)
+                modeMat[dof][mi] = vals[k];
+            });
+          }
+        } else { j++; }
+      }
+
+      // $ir_spectrum — one row per mode (including zeros), col 2 = Int (km/mol)
+      const irStart = sec('$ir_spectrum');
+      const irMap = {};
+      if (irStart >= 0) {
+        const nIR = parseInt(lines[irStart + 1]);
+        for (let i = 0; i < nIR; i++) {
+          const parts = lines[irStart + 2 + i].trim().split(/\s+/);
+          if (parts.length >= 3) irMap[i] = parseFloat(parts[2]);
+        }
+      }
+
+      // Build vibrational modes, computing reduced mass from displacements and atomic masses
+      const modes = [];
+      for (let k = 0; k < nModes; k++) {
+        const { idx, freq } = allFreqs[k];
+        if (Math.abs(freq) < 0.1) continue;
+
+        const displacements = atoms.map((_, ai) => ({
+          dx: modeMat[ai * 3    ][idx],
+          dy: modeMat[ai * 3 + 1][idx],
+          dz: modeMat[ai * 3 + 2][idx]
+        }));
+
+        // μ = Σᵢ mᵢ |Lᵢ|²  (works because modes are normalized in Cartesian space)
+        const redMass = atoms.reduce((sum, _, ai) => {
+          const d = displacements[ai];
+          return sum + atomMasses[ai] * (d.dx*d.dx + d.dy*d.dy + d.dz*d.dz);
+        }, 0);
+
+        modes.push({
+          index: modes.length + 1,
+          frequency: freq,
+          reduced_mass: redMass,
+          intensity: irMap[idx] != null ? irMap[idx] : 0.0,
+          displacements
+        });
+      }
+      if (!modes.length) throw new Error('ORCA hess: no vibrational modes found');
+
+      return { title: 'ORCA Hessian', atoms, modes };
+    }
+
+    function parseGaussianFchk(text) {
+      const BOHR = 0.529177210903;
+      const lines = text.split('\n');
+
+      // Read a labeled array of floats (or a scalar wrapped in an array)
+      function readArray(label) {
+        const idx = lines.findIndex(l => l.startsWith(label));
+        if (idx < 0) return null;
+        const mN = lines[idx].match(/N=\s*(\d+)/);
+        if (!mN) {
+          const mV = lines[idx].match(/[IR]\s+([-\d.eE+]+)\s*$/);
+          return mV ? [parseFloat(mV[1])] : null;
+        }
+        const count = parseInt(mN[1]);
+        const vals = [];
+        for (let j = idx + 1; vals.length < count && j < lines.length; j++)
+          lines[j].trim().split(/\s+/).forEach(v => vals.push(parseFloat(v)));
+        return vals.slice(0, count);
+      }
+
+      function readIntArray(label) {
+        const idx = lines.findIndex(l => l.startsWith(label));
+        if (idx < 0) return null;
+        const mN = lines[idx].match(/N=\s*(\d+)/);
+        if (!mN) {
+          const mV = lines[idx].match(/I\s+(-?\d+)\s*$/);
+          return mV ? [parseInt(mV[1])] : null;
+        }
+        const count = parseInt(mN[1]);
+        const vals = [];
+        for (let j = idx + 1; vals.length < count && j < lines.length; j++)
+          lines[j].trim().split(/\s+/).forEach(v => vals.push(parseInt(v)));
+        return vals.slice(0, count);
+      }
+
+      // Atoms
+      const atomNums = readIntArray('Atomic numbers');
+      if (!atomNums) throw new Error('fchk: missing Atomic numbers');
+      const coords = readArray('Current cartesian coordinates');
+      if (!coords) throw new Error('fchk: missing Current cartesian coordinates');
+
+      const nAtoms = atomNums.length;
+      const atoms = atomNums.map((an, i) => ({
+        element: AN_TO_SYMBOL[an] || 'X',
+        x: coords[i * 3    ] * BOHR,
+        y: coords[i * 3 + 1] * BOHR,
+        z: coords[i * 3 + 2] * BOHR
+      }));
+
+      // Normal mode count
+      const nModesArr = readIntArray('Number of Normal Modes');
+      if (!nModesArr) throw new Error('fchk: missing Number of Normal Modes (run a freq job)');
+      const nModes = nModesArr[0];
+      const nDOF = nAtoms * 3;
+
+      // Vib-E2: packed [freq×N, redmass×N, forceconst×N, IRint×N, ...]
+      const vibE2 = readArray('Vib-E2');
+      if (!vibE2 || vibE2.length < 4 * nModes)
+        throw new Error('fchk: insufficient Vib-E2 data');
+      const frequencies = vibE2.slice(0, nModes);
+      const redMasses   = vibE2.slice(nModes,     2 * nModes);
+      const irInts      = vibE2.slice(3 * nModes, 4 * nModes);
+
+      // Vib-Modes: flat [mode0_dof0, mode0_dof1, ..., mode1_dof0, ...]
+      const vibModes = readArray('Vib-Modes');
+      if (!vibModes || vibModes.length < nModes * nDOF)
+        throw new Error('fchk: insufficient Vib-Modes data');
+
+      const modes = frequencies.map((freq, k) => ({
+        index: k + 1,
+        frequency: freq,
+        reduced_mass: redMasses[k],
+        intensity: irInts[k],
+        displacements: atoms.map((_, ai) => ({
+          dx: vibModes[k * nDOF + ai * 3    ],
+          dy: vibModes[k * nDOF + ai * 3 + 1],
+          dz: vibModes[k * nDOF + ai * 3 + 2]
+        }))
+      }));
+
+      return { title: 'Gaussian fchk', atoms, modes };
+    }
+
     // Auto-detect format and dispatch
     function parseFile(text, filename) {
       const ext = filename.split('.').pop().toLowerCase();
       if (ext === 'cjson') return parseCJSON(text);
+      if (ext === 'hess') return parseORCAHess(text);
+      if (ext === 'fchk') return parseGaussianFchk(text);
       if (ext === 'json') {
         // Sniff for CJSON by key presence before falling back to our schema
         try {
