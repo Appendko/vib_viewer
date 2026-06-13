@@ -1849,8 +1849,9 @@
     // ── Method selector ──
     document.querySelectorAll('.method-btn').forEach(btn => {
       btn.addEventListener('click', () => {
+        if (!btn.dataset.method) return;
         currentMethod = btn.dataset.method;
-        document.querySelectorAll('.method-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.method-btn[data-method]').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         document.getElementById('group-section').style.display =
           (currentMethod === 'NM') ? 'none' : 'block';
