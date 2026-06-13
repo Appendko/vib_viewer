@@ -1658,7 +1658,7 @@
         const r   = VDW_RADII[atom.element] || VDW_RADII.DEFAULT;
         const mat = new THREE.MeshStandardMaterial({
           color: ELEMENT_COLORS[atom.element] || ELEMENT_COLORS.DEFAULT,
-          roughness: 0.25, metalness: 0
+          roughness: 0.35, metalness: 0.3
         });
         const mesh = new THREE.Mesh(_sphereGeo, mat);
         mesh.scale.setScalar(sticksOnly ? 0 : r * ballScale);
@@ -2389,6 +2389,9 @@
       isRecording = true;
       const savedAnimTime = animationTime;
 
+      // Swap atom materials to GIF-safe settings (neutral specular, no color-split)
+      atomMeshes.forEach(m => { m.material.metalness = 0; m.material.roughness = 0.25; });
+
       for (let i = 0; i < FRAMES; i++) {
         // Exact phase — evenly spaced, guaranteed perfect loop
         animationTime = (i / FRAMES) * ANIM_PERIOD;
@@ -2416,6 +2419,9 @@
         btn.textContent = `Capturing ${i + 1}/${FRAMES}`;
         await new Promise(r => setTimeout(r, 0));  // yield — keeps UI responsive
       }
+
+      // Restore original atom material settings
+      atomMeshes.forEach(m => { m.material.metalness = 0.3; m.material.roughness = 0.35; });
 
       animationTime = savedAnimTime;
       isRecording = false;
