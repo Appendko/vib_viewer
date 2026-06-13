@@ -126,8 +126,19 @@
     .mode-idx { color: #9ca3af; font-size: 0.75rem; }
     .mode-freq { font-weight: 600; color: #e5e7eb; }
     .mode-meta { font-size: 0.73rem; color: #9ca3af; text-align: right; }
+    /* ── Mode list min height ── */
+    #mode-list-section { min-height: 120px; }
     /* ── Controls ── */
-    #controls { padding: 10px 12px; border-top: 1px solid #374151; flex-shrink: 0; }
+    #controls { padding: 10px 12px 4px; border-top: 1px solid #374151; flex-shrink: 1; overflow-y: auto; }
+    .ctrl-section-toggle {
+      width: 100%; padding: 4px 0; background: none; border: none;
+      border-top: 1px solid #2d3748; color: #6b7280; font-size: 0.76rem;
+      text-align: left; cursor: pointer; display: flex; align-items: center; gap: 5px;
+      margin-top: 6px;
+    }
+    .ctrl-section-toggle:hover { color: #9ca3af; }
+    .ctrl-section-body { display: none; padding-top: 4px; }
+    .ctrl-section-body.open { display: block; }
     .display-btns { display: flex; gap: 5px; margin-bottom: 10px; }
     .disp-btn {
       flex: 1; padding: 6px 4px; border: 1px solid #374151; border-radius: 6px;
@@ -266,6 +277,7 @@
     </div>
 
     <div id="controls">
+      <!-- ── Display (always visible) ── -->
       <div class="display-btns">
         <button class="disp-btn active" data-mode="animation">Anim</button>
         <button class="disp-btn" data-mode="quiver">Quiver</button>
@@ -286,43 +298,53 @@
         <input type="range" id="arrow-len-slider" min="0.5" max="6.0" step="0.1" value="3.0">
         <span class="slider-val" id="arrow-len-val">3.0</span>
       </div>
-      <div class="slider-row">
-        <span class="slider-label">Ball size</span>
-        <input type="range" id="ball-slider" min="0.1" max="1.0" step="0.05" value="0.4">
-        <span class="slider-val" id="ball-val">0.4</span>
+
+      <!-- ── Appearance (collapsed by default) ── -->
+      <button class="ctrl-section-toggle" data-ctrl="appearance">▸ Appearance</button>
+      <div class="ctrl-section-body" id="ctrl-appearance">
+        <div class="slider-row">
+          <span class="slider-label">Ball size</span>
+          <input type="range" id="ball-slider" min="0.1" max="1.0" step="0.05" value="0.4">
+          <span class="slider-val" id="ball-val">0.4</span>
+        </div>
+        <div class="slider-row">
+          <span class="slider-label">Stick size</span>
+          <input type="range" id="stick-slider" min="0.02" max="0.3" step="0.01" value="0.12">
+          <span class="slider-val" id="stick-val">0.12</span>
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" id="sticks-only-cb">
+          <label for="sticks-only-cb">Sticks only</label>
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" id="show-symbols-cb">
+          <label for="show-symbols-cb">Atom symbols</label>
+        </div>
+        <div class="checkbox-row">
+          <input type="checkbox" id="show-indices-cb">
+          <label for="show-indices-cb">Atom indices</label>
+        </div>
       </div>
-      <div class="slider-row">
-        <span class="slider-label">Stick size</span>
-        <input type="range" id="stick-slider" min="0.02" max="0.3" step="0.01" value="0.12">
-        <span class="slider-val" id="stick-val">0.12</span>
+
+      <!-- ── Export (collapsed by default) ── -->
+      <button class="ctrl-section-toggle" data-ctrl="export">▸ Export</button>
+      <div class="ctrl-section-body" id="ctrl-export">
+        <button class="disp-btn" id="spectrum-btn" style="width:100%;margin-top:4px">Spectrum</button>
+        <div id="gif-settings">
+          <label>FPS</label>
+          <input class="gif-input" type="number" id="gif-fps" value="15" min="5" max="30" step="1">
+          <label>Cycles</label>
+          <input class="gif-input" type="number" id="gif-cycles" value="1" min="1" max="5" step="1">
+          <label>Size</label>
+          <select id="gif-size-sel">
+            <option value="0.25">25%</option>
+            <option value="0.5" selected>50%</option>
+            <option value="1.0">100%</option>
+          </select>
+        </div>
+        <button class="disp-btn" id="gif-btn">Record GIF</button>
+        <div id="gif-status"></div>
       </div>
-      <div class="checkbox-row">
-        <input type="checkbox" id="sticks-only-cb">
-        <label for="sticks-only-cb">Sticks only</label>
-      </div>
-      <div class="checkbox-row">
-        <input type="checkbox" id="show-symbols-cb">
-        <label for="show-symbols-cb">Atom symbols</label>
-      </div>
-      <div class="checkbox-row">
-        <input type="checkbox" id="show-indices-cb">
-        <label for="show-indices-cb">Atom indices</label>
-      </div>
-      <button class="disp-btn" id="spectrum-btn" style="width:100%;margin-top:8px">Spectrum</button>
-      <div id="gif-settings">
-        <label>FPS</label>
-        <input class="gif-input" type="number" id="gif-fps" value="15" min="5" max="30" step="1">
-        <label>Cycles</label>
-        <input class="gif-input" type="number" id="gif-cycles" value="1" min="1" max="5" step="1">
-        <label>Size</label>
-        <select id="gif-size-sel">
-          <option value="0.25">25%</option>
-          <option value="0.5" selected>50%</option>
-          <option value="1.0">100%</option>
-        </select>
-      </div>
-      <button class="disp-btn" id="gif-btn">Record GIF</button>
-      <div id="gif-status"></div>
     </div>
 
     <button id="advanced-toggle">▸ Advanced</button>
@@ -1753,6 +1775,15 @@
     });
 
     // ── Advanced panel ──
+    // ── Collapsible control sections ──
+    document.querySelectorAll('.ctrl-section-toggle').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const body = document.getElementById('ctrl-' + btn.dataset.ctrl);
+        const open = body.classList.toggle('open');
+        btn.textContent = (open ? '▾ ' : '▸ ') + btn.dataset.ctrl.charAt(0).toUpperCase() + btn.dataset.ctrl.slice(1);
+      });
+    });
+
     const advToggle = document.getElementById('advanced-toggle');
     const advBody   = document.getElementById('advanced-body');
     advToggle.addEventListener('click', () => {
