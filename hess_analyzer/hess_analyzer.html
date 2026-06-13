@@ -1,0 +1,1930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hessian Analyzer</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 0; overflow: hidden;
+      background: #111827;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      color: #f9fafb;
+      display: flex; height: 100vh;
+    }
+    /* ── Left Panel ── */
+    #panel {
+      width: 300px; min-width: 300px;
+      background: #1f2937;
+      border-right: 1px solid #374151;
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+    #panel-header {
+      padding: 12px 16px 10px;
+      border-bottom: 1px solid #374151;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+    #panel-header h1 { margin: 0 0 8px; font-size: 1.05rem; font-weight: 600; color: #f3f4f6; }
+    .upload-area {
+      border: 1px dashed #4b5563;
+      border-radius: 8px;
+      padding: 8px;
+      text-align: center;
+      cursor: pointer;
+      font-size: 0.82rem;
+      color: #9ca3af;
+      position: relative;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .upload-area:hover { border-color: #60a5fa; background: rgba(96,165,250,0.05); }
+    .upload-area input[type=file] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    #file-name { margin-top: 4px; font-size: 0.75rem; color: #6b7280; min-height: 1em; }
+    /* ── Method selector ── */
+    .method-bar { display: flex; gap: 4px; margin: 8px 0 6px; }
+    .method-btn {
+      flex: 1; padding: 5px 2px; border: 1px solid #374151; border-radius: 6px;
+      background: #374151; color: #d1d5db; font-size: 0.82rem; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .method-btn.active { background: #7c3aed; border-color: #7c3aed; color: #fff; }
+    /* ── Group section ── */
+    #group-section { margin-bottom: 6px; }
+    .adv-label { font-size: 0.78rem; color: #9ca3af; margin-bottom: 3px; margin-top: 6px; }
+    #group-toolbar { display: flex; gap: 4px; margin-bottom: 6px; }
+    #select-mode-btn.active { background: #f59e0b; border-color: #f59e0b; color: #000; }
+    #group-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; min-height: 22px; }
+    .group-chip {
+      display: flex; align-items: center; gap: 5px; padding: 3px 8px;
+      border-radius: 12px; font-size: 0.75rem; cursor: pointer;
+      background: #374151; border: 2px solid transparent; user-select: none; color: #d1d5db;
+    }
+    .group-chip.active-chip { border-color: #fff; }
+    .chip-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .chip-x { opacity: 0.55; font-size: 0.7rem; line-height: 1; margin-left: 2px; }
+    .chip-x:hover { opacity: 1; }
+    .group-input-row { display: flex; gap: 4px; margin-bottom: 3px; }
+    #group-input {
+      flex: 1; background: #111827; border: 1px solid #374151; border-radius: 6px;
+      color: #d1d5db; font-size: 0.78rem; padding: 4px 6px; font-family: monospace;
+    }
+    #group-input::placeholder { color: #4b5563; }
+    #auto-group-btn {
+      padding: 4px 8px; border: 1px solid #374151; border-radius: 6px;
+      background: #374151; color: #9ca3af; font-size: 0.75rem; cursor: pointer;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    #auto-group-btn:hover { background: #4b5563; color: #d1d5db; }
+    #group-text-section summary { cursor: pointer; font-size: 0.78rem; color: #6b7280; margin-top: 4px; }
+    #atom-list {
+      max-height: 48px; overflow-y: auto;
+      font-size: 0.71rem; color: #6b7280;
+      font-family: monospace; line-height: 1.6;
+      padding: 2px 4px;
+      background: #111827; border: 1px solid #2d3748; border-radius: 4px;
+      margin-bottom: 4px;
+    }
+    /* ── Canvas select ── */
+    #select-rect {
+      position: absolute; border: 1.5px dashed #f59e0b;
+      background: rgba(245,158,11,0.07); pointer-events: none; display: none;
+    }
+    #canvas-container.atom-pick-mode { cursor: crosshair; }
+    /* ── Run button ── */
+    #run-btn {
+      width: 100%; padding: 7px; border: none; border-radius: 6px;
+      background: #059669; color: #fff; font-size: 0.88rem; cursor: pointer;
+      margin-top: 6px; font-weight: 500;
+    }
+    #run-btn:hover:not(:disabled) { background: #047857; }
+    #run-btn:disabled { background: #374151; color: #6b7280; cursor: default; }
+    #status-msg { font-size: 0.74rem; color: #6b7280; margin-top: 4px; min-height: 1em; }
+    /* ── Mode List ── */
+    #mode-list-section { display: flex; flex-direction: column; flex: 1; overflow: hidden; padding: 8px 12px 0; }
+    .sort-bar { display: flex; gap: 6px; margin-bottom: 6px; }
+    .sort-btn {
+      flex: 1; padding: 5px; border: 1px solid #374151; border-radius: 6px;
+      background: #374151; color: #d1d5db; font-size: 0.8rem; cursor: pointer;
+    }
+    .sort-btn.active { background: #3b82f6; border-color: #3b82f6; color: #fff; }
+    #mode-list { flex: 1; overflow-y: auto; border-radius: 6px; border: 1px solid #374151; }
+    .mode-row {
+      padding: 7px 10px; cursor: pointer; border-bottom: 1px solid #1f2937;
+      font-size: 0.82rem; display: grid;
+      grid-template-columns: 2rem 1fr auto;
+      gap: 4px; align-items: center;
+      transition: background 0.1s;
+    }
+    .mode-row:hover { background: #2d3748; }
+    .mode-row.selected { background: #1d4ed8; }
+    .mode-idx { color: #9ca3af; font-size: 0.75rem; }
+    .mode-freq { font-weight: 600; color: #e5e7eb; }
+    .mode-meta { font-size: 0.73rem; color: #9ca3af; text-align: right; }
+    /* ── Controls ── */
+    #controls { padding: 10px 12px; border-top: 1px solid #374151; flex-shrink: 0; }
+    .display-btns { display: flex; gap: 5px; margin-bottom: 10px; }
+    .disp-btn {
+      flex: 1; padding: 6px 4px; border: 1px solid #374151; border-radius: 6px;
+      background: #374151; color: #d1d5db; font-size: 0.8rem; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .disp-btn.active { background: #059669; border-color: #059669; color: #fff; }
+    .slider-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .slider-label { font-size: 0.78rem; color: #9ca3af; width: 72px; flex-shrink: 0; }
+    .slider-row input[type=range] { flex: 1; accent-color: #3b82f6; }
+    .slider-val { font-size: 0.75rem; color: #6b7280; width: 30px; text-align: right; }
+    .slider-row.disabled { opacity: 0.4; pointer-events: none; }
+    .checkbox-row { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; color: #9ca3af; margin-top: 4px; }
+    .checkbox-row input[type=checkbox] { accent-color: #3b82f6; }
+    /* ── Advanced Panel ── */
+    #advanced-toggle {
+      width: 100%; padding: 8px 12px; background: none; border: none;
+      border-top: 1px solid #374151; color: #9ca3af; font-size: 0.8rem;
+      text-align: left; cursor: pointer; display: flex; align-items: center; gap: 6px;
+      flex-shrink: 0;
+    }
+    #advanced-toggle:hover { color: #d1d5db; }
+    #advanced-body { padding: 10px 12px; border-top: 1px solid #2d3748; display: none; }
+    #advanced-body.open { display: block; }
+    #bond-list-textarea {
+      width: 100%; height: 80px; background: #111827; border: 1px solid #374151;
+      border-radius: 6px; color: #d1d5db; font-size: 0.75rem; font-family: monospace;
+      padding: 6px; resize: vertical;
+    }
+    .adv-btns { display: flex; gap: 6px; margin-top: 6px; }
+    .adv-btn {
+      flex: 1; padding: 5px; border: 1px solid #374151; border-radius: 6px;
+      background: #374151; color: #d1d5db; font-size: 0.78rem; cursor: pointer;
+    }
+    .adv-btn:hover { background: #4b5563; }
+    /* ── Canvas ── */
+    #canvas-container { flex: 1; position: relative; }
+    #drop-overlay {
+      position: fixed; inset: 0;
+      background: rgba(17,24,39,0.9); color: #60a5fa;
+      display: flex; justify-content: center; align-items: center;
+      font-size: 2rem; font-weight: bold; z-index: 100;
+      opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    }
+    #drop-overlay.active { opacity: 1; }
+    /* ── Spectrum Panel ── */
+    #spectrum-panel {
+      position: absolute; bottom: 16px; right: 16px;
+      width: 440px; height: 200px; min-width: 260px; min-height: 130px;
+      background: rgba(17,24,39,0.93); border: 1px solid #374151;
+      border-radius: 10px; display: none; flex-direction: column;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.6); z-index: 10; resize: both; overflow: hidden;
+    }
+    #spectrum-panel.open { display: flex; }
+    #spectrum-header {
+      display: flex; align-items: center; gap: 6px; padding: 5px 8px;
+      border-bottom: 1px solid #374151; font-size: 0.78rem; color: #9ca3af;
+      flex-shrink: 0; cursor: move; user-select: none;
+    }
+    #spectrum-header span { font-weight: 600; margin-right: 4px; }
+    #spectrum-header label { color: #6b7280; white-space: nowrap; }
+    .spec-input {
+      width: 62px; background: #111827; border: 1px solid #374151; border-radius: 4px;
+      color: #d1d5db; font-size: 0.75rem; padding: 2px 4px; text-align: right;
+    }
+    #spectrum-close {
+      margin-left: auto; background: none; border: none; color: #6b7280;
+      font-size: 0.85rem; cursor: pointer; padding: 2px 4px; border-radius: 4px;
+    }
+    #spectrum-close:hover { color: #d1d5db; background: #374151; }
+    #spectrum-canvas { flex: 1; min-height: 0; width: 100%; display: block; cursor: crosshair; }
+    #spectrum-btn.active { background: #059669; border-color: #059669; color: #fff; }
+    /* ── GIF recorder ── */
+    #gif-settings { display: flex; align-items: center; gap: 5px; margin-top: 5px; flex-wrap: wrap; }
+    #gif-settings label { font-size: 0.72rem; color: #6b7280; white-space: nowrap; }
+    .gif-input {
+      width: 40px; background: #111827; border: 1px solid #374151; border-radius: 4px;
+      color: #d1d5db; font-size: 0.75rem; padding: 2px 4px; text-align: right;
+    }
+    #gif-size-sel {
+      background: #111827; border: 1px solid #374151; border-radius: 4px;
+      color: #d1d5db; font-size: 0.75rem; padding: 2px 3px;
+    }
+    #gif-btn { width: 100%; margin-top: 5px; }
+    #gif-status { font-size: 0.72rem; color: #6b7280; text-align: center; margin-top: 3px; min-height: 1em; }
+  </style>
+</head>
+<body>
+
+  <div id="panel">
+    <div id="panel-header">
+      <h1>Hessian Analyzer</h1>
+      <div class="upload-area">
+        Click or drop .hess / .fchk
+        <input type="file" id="file-input" accept=".hess,.fchk">
+      </div>
+      <div id="file-name"></div>
+
+      <div class="method-bar">
+        <button class="method-btn active" data-method="NM">NM</button>
+        <button class="method-btn" data-method="PHVA">PHVA</button>
+        <button class="method-btn" data-method="MBH">MBH</button>
+      </div>
+
+      <div id="group-section" style="display:none">
+        <div id="group-toolbar">
+          <button id="select-mode-btn" class="method-btn">✏ Select</button>
+          <button id="add-group-btn"   class="method-btn">+ Group</button>
+          <button id="clear-groups-btn" class="method-btn">Clear</button>
+        </div>
+        <div id="group-chips"></div>
+        <div class="checkbox-row" style="margin-bottom:4px">
+          <input type="checkbox" id="group-colors-cb" checked>
+          <label for="group-colors-cb">Group colors</label>
+        </div>
+        <div id="atom-list"></div>
+        <details id="group-text-section">
+          <summary>Text input</summary>
+          <div class="group-input-row" style="margin-top:4px">
+            <input id="group-input" type="text" placeholder="1,2,3 | 4,5 | 6">
+            <button id="auto-group-btn">Auto</button>
+          </div>
+        </details>
+      </div>
+
+      <button id="run-btn" disabled>Run Analysis</button>
+      <div id="status-msg"></div>
+    </div>
+
+    <div id="mode-list-section">
+      <div class="sort-bar">
+        <button class="sort-btn active" id="sort-index-btn">Index</button>
+        <button class="sort-btn" id="sort-freq-btn">Freq</button>
+      </div>
+      <div id="mode-list"></div>
+    </div>
+
+    <div id="controls">
+      <div class="display-btns">
+        <button class="disp-btn active" data-mode="animation">Anim</button>
+        <button class="disp-btn" data-mode="quiver">Quiver</button>
+        <button class="disp-btn" data-mode="both">Both</button>
+      </div>
+      <div class="slider-row" id="amplitude-row">
+        <span class="slider-label">Amplitude</span>
+        <input type="range" id="amplitude-slider" min="0" max="3" step="0.05" value="1.0">
+        <span class="slider-val" id="amplitude-val">1.0</span>
+      </div>
+      <div class="slider-row" id="speed-row">
+        <span class="slider-label">Speed</span>
+        <input type="range" id="speed-slider" min="0.1" max="5.0" step="0.1" value="1.0">
+        <span class="slider-val" id="speed-val">1.0</span>
+      </div>
+      <div class="slider-row disabled" id="arrow-len-row">
+        <span class="slider-label">Arrow len</span>
+        <input type="range" id="arrow-len-slider" min="0.5" max="6.0" step="0.1" value="3.0">
+        <span class="slider-val" id="arrow-len-val">3.0</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Ball size</span>
+        <input type="range" id="ball-slider" min="0.1" max="1.0" step="0.05" value="0.4">
+        <span class="slider-val" id="ball-val">0.4</span>
+      </div>
+      <div class="slider-row">
+        <span class="slider-label">Stick size</span>
+        <input type="range" id="stick-slider" min="0.02" max="0.3" step="0.01" value="0.12">
+        <span class="slider-val" id="stick-val">0.12</span>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="sticks-only-cb">
+        <label for="sticks-only-cb">Sticks only</label>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="show-symbols-cb">
+        <label for="show-symbols-cb">Atom symbols</label>
+      </div>
+      <div class="checkbox-row">
+        <input type="checkbox" id="show-indices-cb">
+        <label for="show-indices-cb">Atom indices</label>
+      </div>
+      <button class="disp-btn" id="spectrum-btn" style="width:100%;margin-top:8px">Spectrum</button>
+      <div id="gif-settings">
+        <label>FPS</label>
+        <input class="gif-input" type="number" id="gif-fps" value="15" min="5" max="30" step="1">
+        <label>Cycles</label>
+        <input class="gif-input" type="number" id="gif-cycles" value="1" min="1" max="5" step="1">
+        <label>Size</label>
+        <select id="gif-size-sel">
+          <option value="0.25">25%</option>
+          <option value="0.5" selected>50%</option>
+          <option value="1.0">100%</option>
+        </select>
+      </div>
+      <button class="disp-btn" id="gif-btn">Record GIF</button>
+      <div id="gif-status"></div>
+    </div>
+
+    <button id="advanced-toggle">▸ Advanced</button>
+    <div id="advanced-body">
+      <div class="adv-label">Rectangle select behavior</div>
+      <div class="method-bar" id="rect-mode-bar" style="margin-top:0">
+        <button class="method-btn active" data-rectmode="move">Move to group</button>
+        <button class="method-btn"        data-rectmode="skip">Skip grouped</button>
+      </div>
+      <div class="adv-label">Bond tolerance</div>
+      <div class="slider-row">
+        <input type="range" id="tolerance-slider" min="0.8" max="1.8" step="0.05" value="1.25">
+        <span class="slider-val" id="tolerance-val">1.25×</span>
+      </div>
+      <div class="adv-label">Bond list (JSON)</div>
+      <textarea id="bond-list-textarea" spellcheck="false"></textarea>
+      <div class="adv-btns">
+        <button class="adv-btn" id="apply-bonds-btn">Apply</button>
+        <button class="adv-btn" id="restore-bonds-btn">Restore Default</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="drop-overlay">Drop .hess / .fchk file here</div>
+  <div id="canvas-container">
+    <div id="select-rect"></div>
+    <div id="spectrum-panel">
+      <div id="spectrum-header">
+        <span>IR Spectrum</span>
+        <label>Scale</label>
+        <input class="spec-input" type="number" id="freq-scale" value="1.0000" step="0.001" min="0.5" max="2.0">
+        <label>FWHM</label>
+        <input class="spec-input" type="number" id="spec-fwhm" value="20" step="5" min="1" max="500" style="width:52px">
+        <button id="spectrum-close">✕</button>
+      </div>
+      <canvas id="spectrum-canvas"></canvas>
+    </div>
+  </div>
+
+  <script type="module">
+    import { Matrix, EigenvalueDecomposition, SingularValueDecomposition } from 'https://cdn.jsdelivr.net/npm/ml-matrix@6/+esm';
+
+    // === 0. PHYSICAL CONSTANTS ===
+    const HARTREE2CM   = 219474.6313632;
+    const AMU2AU       = 1822.888649;
+    const BOHR2ANG     = 0.52917721;
+    const FC2CM        = HARTREE2CM / Math.sqrt(AMU2AU);  // ≈ 5140.487466
+    const EBOHR2KMMOL  = 31.223070185771018;
+    const SVD_THRESH   = 1e-2;
+    const ROT_THRESH   = 1e-3;
+
+    // === 1. ELEMENT DATA ===
+    const ELEMENT_COLORS = {
+      H:0xFFFFFF, He:0xD9FFFF, Li:0xCC80FF, Be:0xC2FF00, B:0xFFB5B5,
+      C:0x909090, N:0x3050F8, O:0xFF0D0D, F:0x90E050, Ne:0xB3E3F5,
+      Na:0xAB5CF2, Mg:0x8AFF00, Al:0xBFA6A6, Si:0xF0C8A0, P:0xFF8000,
+      S:0xFFFF30, Cl:0x1FF01F, Ar:0x80D1E3, K:0x8F40D4, Ca:0x3DFF00,
+      Sc:0xE6E6E6, Ti:0xBFC2C7, V:0xA6A6AB, Cr:0x8A99C7, Mn:0x9C7AC7,
+      Fe:0xE06633, Co:0xF090A0, Ni:0x50D050, Cu:0xC88033, Zn:0x7D80B0,
+      Ga:0xC28F8F, Ge:0x668F8F, As:0xBD80E3, Se:0xFFA100, Br:0xA62929,
+      Kr:0x5CB8D1, Rb:0x702EB0, Sr:0x00FF00, Y:0x94FFFF, Zr:0x94E0E0,
+      Nb:0x73C2C9, Mo:0x54B5B5, Tc:0x3B9E9E, Ru:0x248F8F, Rh:0x0A7D8C,
+      Pd:0x006985, Ag:0xC0C0C0, Cd:0xFFD98F, In:0xA67573, Sn:0x668080,
+      Sb:0x9E63B5, Te:0xD47A00, I:0x940094, Xe:0x429EB0, Cs:0x57178F,
+      Ba:0x00C900, La:0x70D4FF, Ce:0xFFFFC7, Pr:0xD9FFC7, Nd:0xC7FFC7,
+      Pm:0xA3FFC7, Sm:0x8FFFC7, Eu:0x61FFC7, Gd:0x45FFC7, Tb:0x30FFC7,
+      Dy:0x1FFFC7, Ho:0x00FF9C, Er:0x00E675, Tm:0x00D452, Yb:0x00BF38,
+      Lu:0x00AB24, Hf:0x4DC2FF, Ta:0x4DA6FF, W:0x2194D6, Re:0x267DAB,
+      Os:0x266696, Ir:0x175487, Pt:0xD0D0E0, Au:0xFFD123, Hg:0xB8B8D0,
+      Tl:0xA6544D, Pb:0x575961, Bi:0x9E4FB5, Po:0xAB5C00, At:0x754F45,
+      Rn:0x428296, Fr:0x420066, Ra:0x007D00, Ac:0x70ABFA, Th:0x00BAFF,
+      Pa:0x00A1FF, U:0x008FFF, Np:0x0080FF, Pu:0x006BFF, Am:0x545CF2,
+      Cm:0x785CE3, Bk:0x8A4FE3, Cf:0xA136D4, Es:0xB31FD4, Fm:0xB31FBA,
+      Md:0xB30DA6, No:0xBD0D87, Lr:0xC70066, Rf:0xCC0059, Db:0xD1004F,
+      Sg:0xD90045, Bh:0xE00038, Hs:0xE6002E, Mt:0xEB0026,
+      DEFAULT: 0xFF69B4
+    };
+
+    const VDW_RADII = {
+      H:1.20, He:1.40, Li:1.82, Be:1.53, B:1.92, C:1.70, N:1.55, O:1.52,
+      F:1.47, Ne:1.54, Na:2.27, Mg:1.73, Al:1.84, Si:2.10, P:1.80, S:1.80,
+      Cl:1.75, Ar:1.88, K:2.75, Ca:2.31, Sc:2.11, Ti:2.00, V:2.00, Cr:2.00,
+      Mn:2.00, Fe:2.00, Co:2.00, Ni:1.63, Cu:1.40, Zn:1.39, Ga:1.87, Ge:2.11,
+      As:1.85, Se:1.90, Br:1.85, Kr:2.02, Rb:3.03, Sr:2.49, Y:2.40, Zr:2.30,
+      Nb:2.15, Mo:2.10, Tc:2.05, Ru:2.05, Rh:2.00, Pd:2.05, Ag:2.10, Cd:2.18,
+      In:1.93, Sn:2.17, Sb:2.06, Te:2.06, I:1.98, Xe:2.16, Cs:3.43, Ba:2.68,
+      Pt:2.13, Au:2.14, Hg:2.23, Tl:1.96, Pb:2.02, Bi:2.07, DEFAULT:2.00
+    };
+
+    const COVALENT_RADII = {
+      H:0.31, He:0.28, Li:1.28, Be:0.96, B:0.84, C:0.76, N:0.71, O:0.66,
+      F:0.57, Ne:0.58, Na:1.66, Mg:1.41, Al:1.21, Si:1.11, P:1.07, S:1.05,
+      Cl:1.02, Ar:1.06, K:2.03, Ca:1.76, Sc:1.70, Ti:1.60, V:1.53, Cr:1.39,
+      Mn:1.61, Fe:1.52, Co:1.50, Ni:1.24, Cu:1.32, Zn:1.22, Ga:1.22, Ge:1.20,
+      As:1.19, Se:1.20, Br:1.20, Kr:1.16, Rb:2.20, Sr:1.95, Y:1.90, Zr:1.75,
+      Nb:1.64, Mo:1.54, Tc:1.47, Ru:1.46, Rh:1.42, Pd:1.39, Ag:1.45, Cd:1.44,
+      In:1.42, Sn:1.39, Sb:1.39, Te:1.38, I:1.39, Xe:1.40, Cs:2.44, Ba:2.15,
+      La:2.07, Hf:1.75, Ta:1.70, W:1.62, Re:1.51, Os:1.44, Ir:1.41, Pt:1.36,
+      Au:1.36, Hg:1.32, Tl:1.45, Pb:1.46, Bi:1.48, DEFAULT:1.50
+    };
+
+    const AN_TO_SYMBOL = {
+      1:'H',2:'He',3:'Li',4:'Be',5:'B',6:'C',7:'N',8:'O',9:'F',10:'Ne',
+      11:'Na',12:'Mg',13:'Al',14:'Si',15:'P',16:'S',17:'Cl',18:'Ar',
+      19:'K',20:'Ca',21:'Sc',22:'Ti',23:'V',24:'Cr',25:'Mn',26:'Fe',
+      27:'Co',28:'Ni',29:'Cu',30:'Zn',31:'Ga',32:'Ge',33:'As',34:'Se',
+      35:'Br',36:'Kr',37:'Rb',38:'Sr',39:'Y',40:'Zr',41:'Nb',42:'Mo',
+      43:'Tc',44:'Ru',45:'Rh',46:'Pd',47:'Ag',48:'Cd',49:'In',50:'Sn',
+      51:'Sb',52:'Te',53:'I',54:'Xe',55:'Cs',56:'Ba',57:'La',58:'Ce',
+      59:'Pr',60:'Nd',61:'Pm',62:'Sm',63:'Eu',64:'Gd',65:'Tb',66:'Dy',
+      67:'Ho',68:'Er',69:'Tm',70:'Yb',71:'Lu',72:'Hf',73:'Ta',74:'W',
+      75:'Re',76:'Os',77:'Ir',78:'Pt',79:'Au',80:'Hg',81:'Tl',82:'Pb',
+      83:'Bi',84:'Po',85:'At',86:'Rn',87:'Fr',88:'Ra',89:'Ac',90:'Th',
+      91:'Pa',92:'U',93:'Np',94:'Pu',95:'Am',96:'Cm',97:'Bk',98:'Cf',
+      99:'Es',100:'Fm',101:'Md',102:'No',103:'Lr',104:'Rf',105:'Db',
+      106:'Sg',107:'Bh',108:'Hs',109:'Mt'
+    };
+
+    // === 2. LINEAR ALGEBRA HELPERS ===
+
+    // Symmetric eigendecomposition: returns {values, vectors} sorted ascending.
+    // vectors[row][col] = row-th component of col-th eigenvector.
+    function eigh(arr2d) {
+      const evd = new EigenvalueDecomposition(new Matrix(arr2d), { assumeSymmetric: true });
+      const rawVals = evd.realEigenvalues;
+      const rawVecs = evd.eigenvectorMatrix.to2DArray();
+      // Sort ascending by eigenvalue
+      const order = rawVals.map((v, k) => ({ v, k }));
+      order.sort((a, b) => a.v - b.v);
+      return {
+        values: order.map(p => p.v),
+        vectors: rawVecs.map(row => order.map(p => row[p.k]))
+      };
+    }
+
+    // Thin SVD: returns {U (m×r), S (r), Vt (r×n)} where r = min(m,n)
+    function svdThin(arr2d) {
+      const svd = new SingularValueDecomposition(new Matrix(arr2d), { autoTranspose: true });
+      const U  = svd.leftSingularVectors.to2DArray();
+      const S  = svd.diagonal;
+      const Vt = svd.rightSingularVectors.transpose().to2DArray();
+      return { U, S, Vt };
+    }
+
+    function matMul(A, B) { return new Matrix(A).mmul(new Matrix(B)).to2DArray(); }
+    function matT(A)      { return new Matrix(A).transpose().to2DArray(); }
+
+    function colNorm(v) {
+      let s = 0;
+      for (let i = 0; i < v.length; i++) s += v[i] * v[i];
+      return Math.sqrt(s);
+    }
+
+    // Horizontal stack of same-row-count 2D arrays
+    function hstack(matrices) {
+      if (!matrices.length) return [];
+      const nRows = matrices[0].length;
+      return Array.from({ length: nRows }, (_, r) => {
+        const row = [];
+        for (const M of matrices) { if (M.length && M[0].length) row.push(...M[r]); }
+        return row;
+      });
+    }
+
+    // Return columns of U (2D array) where S[k] > thresh
+    function keepCols(U, S, thresh) {
+      const kept = [];
+      for (let k = 0; k < S.length; k++) if (S[k] > thresh) kept.push(k);
+      if (!kept.length) return U.map(() => []);
+      return U.map(row => kept.map(k => row[k]));
+    }
+
+    // === 3. RAW FILE PARSERS ===
+
+    // Returns: { symbols, masses, coords (Å), hessian (Hartree/Bohr²), dipDeriv (nDOF×3) | null }
+    function parseHessRaw(text) {
+      const lines = text.split('\n');
+      const sec = key => lines.findIndex(l => l.trim() === key);
+
+      // $atoms — symbol  mass(AMU)  x y z (Bohr)
+      const aStart = sec('$atoms');
+      if (aStart < 0) throw new Error('ORCA hess: no $atoms section');
+      const nAtoms = parseInt(lines[aStart + 1]);
+      const symbols = [], masses = [], coords = [];
+      for (let i = 0; i < nAtoms; i++) {
+        const m = lines[aStart + 2 + i]
+          .match(/^\s*([A-Za-z]+)\s+([\d.eE+]+)\s+([-\d.eE+]+)\s+([-\d.eE+]+)\s+([-\d.eE+]+)/);
+        if (!m) throw new Error(`ORCA hess: cannot parse atom ${i}`);
+        symbols.push(m[1]);
+        masses.push(+m[2]);
+        coords.push([+m[3] * BOHR2ANG, +m[4] * BOHR2ANG, +m[5] * BOHR2ANG]);
+      }
+      const nDOF = nAtoms * 3;
+
+      // $hessian — block-column table, nDOF×nDOF, Hartree/Bohr²
+      const hStart = sec('$hessian');
+      if (hStart < 0) throw new Error('ORCA hess: no $hessian section');
+      // line hStart+1 is just nDOF; blocks start at hStart+2
+      const hess = Array.from({ length: nDOF }, () => new Array(nDOF).fill(0));
+      const reHdr = /^\s{8,}(\d+(?:\s+\d+)+)\s*$/;
+      const reRow = /^\s{1,7}(\d+)\s+([-\d.eE+]+(?:\s+[-\d.eE+]+)*)/;
+      let j = hStart + 2;
+      while (j < lines.length) {
+        if (lines[j].startsWith('$')) break;
+        const hm = lines[j].match(reHdr);
+        if (hm) {
+          const cols = hm[1].trim().split(/\s+/).map(Number);
+          j++;
+          for (; j < lines.length; j++) {
+            const rm = lines[j].match(reRow);
+            if (!rm) break;
+            const row = +rm[1];
+            const vals = rm[2].trim().split(/\s+/).map(Number);
+            cols.forEach((c, k) => {
+              if (row < nDOF && c < nDOF && k < vals.length) hess[row][c] = vals[k];
+            });
+          }
+        } else { j++; }
+      }
+      // Symmetrize
+      for (let r = 0; r < nDOF; r++)
+        for (let c = r + 1; c < nDOF; c++) {
+          const avg = (hess[r][c] + hess[c][r]) / 2;
+          hess[r][c] = hess[c][r] = avg;
+        }
+
+      // $dipole_derivatives — nDOF rows × 3 values (optional)
+      let dipDeriv = null;
+      const dStart = sec('$dipole_derivatives');
+      if (dStart >= 0) {
+        const nDD = parseInt(lines[dStart + 1]);
+        if (nDD === nDOF) {
+          dipDeriv = [];
+          for (let i = 0; i < nDOF; i++) {
+            const parts = lines[dStart + 2 + i].trim().split(/\s+/).map(Number);
+            dipDeriv.push([parts[0] || 0, parts[1] || 0, parts[2] || 0]);
+          }
+        }
+      }
+
+      return { symbols, masses, coords, hessian: hess, dipDeriv };
+    }
+
+    function parseFchkRaw(text) {
+      const lines = text.split('\n');
+
+      function readArray(label) {
+        const idx = lines.findIndex(l => l.startsWith(label));
+        if (idx < 0) return null;
+        const mN = lines[idx].match(/N=\s*(\d+)/);
+        if (!mN) {
+          const mV = lines[idx].match(/[IR]\s+([-\d.eE+]+)\s*$/);
+          return mV ? [parseFloat(mV[1])] : null;
+        }
+        const count = parseInt(mN[1]);
+        const vals = [];
+        for (let j = idx + 1; vals.length < count && j < lines.length; j++)
+          lines[j].trim().split(/\s+/).forEach(v => vals.push(parseFloat(v)));
+        return vals.slice(0, count);
+      }
+
+      function readIntArray(label) {
+        const idx = lines.findIndex(l => l.startsWith(label));
+        if (idx < 0) return null;
+        const mN = lines[idx].match(/N=\s*(\d+)/);
+        if (!mN) {
+          const mV = lines[idx].match(/I\s+(-?\d+)\s*$/);
+          return mV ? [parseInt(mV[1])] : null;
+        }
+        const count = parseInt(mN[1]);
+        const vals = [];
+        for (let j = idx + 1; vals.length < count && j < lines.length; j++)
+          lines[j].trim().split(/\s+/).forEach(v => vals.push(parseInt(v)));
+        return vals.slice(0, count);
+      }
+
+      const atomNums = readIntArray('Atomic numbers');
+      if (!atomNums) throw new Error('fchk: missing Atomic numbers');
+      const coordsFlat = readArray('Current cartesian coordinates');
+      if (!coordsFlat) throw new Error('fchk: missing Current cartesian coordinates');
+      const massesArr = readArray('Real atomic weights');
+      if (!massesArr) throw new Error('fchk: missing Real atomic weights');
+      const hessFlat = readArray('Cartesian Force Constants');
+      if (!hessFlat) throw new Error('fchk: missing Cartesian Force Constants');
+
+      const nAtoms = atomNums.length;
+      const nDOF = nAtoms * 3;
+
+      const symbols = atomNums.map(an => AN_TO_SYMBOL[an] || 'X');
+      const masses = massesArr.slice(0, nAtoms);
+      const coords = Array.from({ length: nAtoms }, (_, i) => [
+        coordsFlat[i * 3    ] * BOHR2ANG,
+        coordsFlat[i * 3 + 1] * BOHR2ANG,
+        coordsFlat[i * 3 + 2] * BOHR2ANG
+      ]);
+
+      // Expand lower-triangular to full symmetric Hessian
+      // flat[k] at row i, col j (j<=i), k = i*(i+1)/2 + j
+      const hess = Array.from({ length: nDOF }, () => new Array(nDOF).fill(0));
+      let k = 0;
+      for (let i = 0; i < nDOF; i++)
+        for (let jj = 0; jj <= i; jj++)
+          hess[i][jj] = hess[jj][i] = hessFlat[k++];
+
+      // Dipole Derivatives: flat nDOF*3 array → (nDOF, 3)
+      let dipDeriv = null;
+      const ddFlat = readArray('Dipole Derivatives');
+      if (ddFlat && ddFlat.length >= nDOF * 3) {
+        dipDeriv = Array.from({ length: nDOF }, (_, i) => [
+          ddFlat[i * 3], ddFlat[i * 3 + 1], ddFlat[i * 3 + 2]
+        ]);
+      }
+
+      return { symbols, masses, coords, hessian: hess, dipDeriv };
+    }
+
+    function parseHessFile(text, filename) {
+      const ext = filename.split('.').pop().toLowerCase();
+      if (ext === 'hess') return parseHessRaw(text);
+      if (ext === 'fchk') return parseFchkRaw(text);
+      throw new Error('Unsupported file type: ' + ext + ' (use .hess or .fchk)');
+    }
+
+    // === 4. ANALYSIS ALGORITHMS ===
+
+    // Build mass-weighted Hessian (3N×3N)
+    function buildMWHessian(H, masses) {
+      const N3 = H.length;
+      return Array.from({ length: N3 }, (_, i) => {
+        const mi = masses[Math.floor(i / 3)];
+        return Array.from({ length: N3 }, (__, j) => {
+          const mj = masses[Math.floor(j / 3)];
+          return H[i][j] / Math.sqrt(mi * mj);
+        });
+      });
+    }
+
+    // Build rigid-body basis for a set of atoms.
+    // Returns a 2D array of shape (3*n_block × k) where k ≤ 6.
+    // Columns are mass-weighted, orthonormal translation + rotation vectors.
+    function buildRigidBasis(atomIndices, coords, masses) {
+      const n = atomIndices.length;
+      const N3 = n * 3;
+
+      const bMasses = atomIndices.map(i => masses[i]);
+      const totalMass = bMasses.reduce((s, m) => s + m, 0);
+
+      // COM
+      const com = [0, 0, 0];
+      for (let i = 0; i < n; i++) {
+        const idx = atomIndices[i];
+        for (let d = 0; d < 3; d++) com[d] += bMasses[i] * coords[idx][d];
+      }
+      for (let d = 0; d < 3; d++) com[d] /= totalMass;
+
+      // Relative coords and sqrt(mass) per DOF
+      const relCoords = atomIndices.map(idx => coords[idx].map((v, d) => v - com[d]));
+      const sqrtM = [];
+      for (let i = 0; i < n; i++) {
+        const sm = Math.sqrt(bMasses[i]);
+        sqrtM.push(sm, sm, sm);
+      }
+
+      // Translation vectors: for dimension d, t_d[3i+d] = sqrt(m_i), else 0
+      const tVecs = [];
+      for (let d = 0; d < 3; d++) {
+        const v = new Array(N3).fill(0);
+        for (let i = 0; i < n; i++) v[3 * i + d] = sqrtM[3 * i];
+        const norm = colNorm(v);
+        if (norm > 1e-10) tVecs.push(v.map(x => x / norm));
+      }
+
+      // Inertia tensor (3×3)
+      const I = [[0,0,0],[0,0,0],[0,0,0]];
+      for (let i = 0; i < n; i++) {
+        const m = bMasses[i];
+        const r = relCoords[i];
+        const rsq = r[0]*r[0] + r[1]*r[1] + r[2]*r[2];
+        for (let a = 0; a < 3; a++)
+          for (let b = 0; b < 3; b++)
+            I[a][b] += m * ((a === b ? rsq : 0) - r[a] * r[b]);
+      }
+
+      // Rotation vectors from principal axes
+      const { values: eigVals, vectors: eigVecs } = eigh(I);
+      const rVecs = [];
+      for (let k = 0; k < 3; k++) {
+        if (eigVals[k] < ROT_THRESH) continue;
+        const axis = [eigVecs[0][k], eigVecs[1][k], eigVecs[2][k]];
+        const v = new Array(N3).fill(0);
+        for (let i = 0; i < n; i++) {
+          const r = relCoords[i];
+          // mass-weighted cross product: sqrt(m_i) * (axis × r_i)
+          v[3*i]   = sqrtM[3*i]   * (axis[1]*r[2] - axis[2]*r[1]);
+          v[3*i+1] = sqrtM[3*i+1] * (axis[2]*r[0] - axis[0]*r[2]);
+          v[3*i+2] = sqrtM[3*i+2] * (axis[0]*r[1] - axis[1]*r[0]);
+        }
+        const norm = colNorm(v);
+        if (norm > 1e-10) rVecs.push(v.map(x => x / norm));
+      }
+
+      const allVecs = [...tVecs, ...rVecs];
+      if (!allVecs.length) return Array.from({ length: N3 }, () => []);
+
+      // Build N3×k matrix from column vectors, then SVD-orthogonalize
+      const combined = Array.from({ length: N3 }, (_, r) => allVecs.map(v => v[r]));
+      const { U, S } = svdThin(combined);
+      return keepCols(U, S, SVD_THRESH);
+    }
+
+    // Project out a set of basis columns from the identity, keep the complementary subspace.
+    // Returns a (N3 × r) matrix where r = N3 - rank(B).
+    function projectOutBasis(N3, B) {
+      if (!B.length || !B[0].length) {
+        // No basis to project out — return identity columns
+        return Matrix.identity(N3).to2DArray();
+      }
+      const BM  = new Matrix(B);
+      const P   = Matrix.identity(N3).sub(BM.mmul(BM.transpose()));
+      const { U, S } = svdThin(P.to2DArray());
+      return keepCols(U, S, SVD_THRESH);
+    }
+
+    // Shared post-processing: unweight, compute freq/redmass/intensity, normalize, sort.
+    // Lmw: 2D array [N3][nModes] (mass-weighted mode vectors as columns)
+    function assembleModeData(symbols, coords, masses, eigenvalues, Lmw, dipDeriv, skipGlobalSort = false) {
+      const N = masses.length;
+      const sqrtMassVec = [];
+      for (let i = 0; i < N; i++) {
+        const sm = Math.sqrt(masses[i]);
+        sqrtMassVec.push(sm, sm, sm);
+      }
+
+      const atoms = symbols.map((el, i) => ({
+        element: el, x: coords[i][0], y: coords[i][1], z: coords[i][2]
+      }));
+
+      const modes = [];
+      for (let k = 0; k < eigenvalues.length; k++) {
+        const w = eigenvalues[k];
+        const freq = Math.sign(w) * Math.sqrt(Math.abs(w)) * FC2CM;
+
+        // Unweight: L_k = Lmw[:,k] / sqrt(mass_vec)
+        const Lk = Lmw.map((row, r) => row[k] / sqrtMassVec[r]);
+        const norm = colNorm(Lk);
+        if (norm < 1e-10) continue;
+
+        // Reduced mass from unnormalized Cartesian vector: 1/||L_k||²
+        const redmass = 1.0 / Lk.reduce((s, v) => s + v * v, 0);
+
+        // Normalize
+        const Lk_norm = Lk.map(v => v / norm);
+
+        // IR intensity using unnormalized Lk: |dip_deriv^T @ Lk|² * EBOHR2KMMOL²
+        let intensity = 0;
+        if (dipDeriv) {
+          const tdip = [0, 1, 2].map(d => Lk.reduce((s, v, r) => s + v * dipDeriv[r][d], 0));
+          intensity = tdip.reduce((s, v) => s + v * v, 0) * EBOHR2KMMOL * EBOHR2KMMOL;
+        }
+
+        modes.push({
+          index: k + 1,
+          frequency: freq,
+          reduced_mass: redmass,
+          intensity,
+          displacements: symbols.map((_, i) => ({
+            dx: Lk_norm[3*i], dy: Lk_norm[3*i+1], dz: Lk_norm[3*i+2]
+          }))
+        });
+      }
+
+      if (!skipGlobalSort) modes.sort((a, b) => a.frequency - b.frequency);
+      modes.forEach((m, i) => { m.index = i + 1; });
+
+      return { title: 'Hessian Analysis', atoms, modes };
+    }
+
+    function runNM(molData) {
+      const { symbols, masses, coords, hessian, dipDeriv } = molData;
+      const N = masses.length;
+      const N3 = N * 3;
+
+      const Hmw    = buildMWHessian(hessian, masses);
+      const allIdx = Array.from({ length: N }, (_, i) => i);
+      const Bsuper = buildRigidBasis(allIdx, coords, masses);
+      const Bvib   = projectOutBasis(N3, Bsuper);
+
+      if (!Bvib[0] || !Bvib[0].length) throw new Error('NM: failed to build vibrational subspace');
+
+      const Hred              = matMul(matT(Bvib), matMul(Hmw, Bvib));
+      const { values, vectors } = eigh(Hred);
+      const Lmw               = matMul(Bvib, vectors);
+
+      return assembleModeData(symbols, coords, masses, values, Lmw, dipDeriv);
+    }
+
+    function runPHVA(molData, groups) {
+      const { symbols, masses, coords, hessian, dipDeriv } = molData;
+      const N  = masses.length;
+      const N3 = N * 3;
+
+      const Hmw      = buildMWHessian(hessian, masses);
+      const allVals  = [];
+      const allModes = [];
+
+      for (const group of groups) {
+        const dofIdx = group.flatMap(a => [3*a, 3*a+1, 3*a+2]);
+        const Hsub   = dofIdx.map(i => dofIdx.map(j => Hmw[i][j]));
+        const { values, vectors } = eigh(Hsub);
+
+        for (let k = 0; k < values.length; k++) {
+          const fullVec = new Array(N3).fill(0);
+          dofIdx.forEach((di, li) => { fullVec[di] = vectors[li][k]; });
+          allVals.push(values[k]);
+          allModes.push(fullVec);
+        }
+      }
+
+      // Stack modes as columns: Lmw[r][k] = allModes[k][r]
+      const Lmw = Array.from({ length: N3 }, (_, r) => allModes.map(m => m[r]));
+      return assembleModeData(symbols, coords, masses, allVals, Lmw, dipDeriv, true);
+    }
+
+    function runMBH(molData, groups) {
+      const { symbols, masses, coords, hessian, dipDeriv } = molData;
+      const N  = masses.length;
+      const N3 = N * 3;
+
+      const Hmw = buildMWHessian(hessian, masses);
+
+      // Add single-atom blocks for ungrouped atoms
+      const grouped   = new Set(groups.flat());
+      const allGroups = [...groups];
+      for (let i = 0; i < N; i++) if (!grouped.has(i)) allGroups.push([i]);
+
+      // Build per-block bases embedded in full N3 space
+      const embeddedBases = [];
+      for (const grp of allGroups) {
+        const Bblock = buildRigidBasis(grp, coords, masses);
+        if (!Bblock.length || !Bblock[0].length) continue;
+        const k_b    = Bblock[0].length;
+        const dofIdx = grp.flatMap(a => [3*a, 3*a+1, 3*a+2]);
+        const Bfull  = Array.from({ length: N3 }, () => new Array(k_b).fill(0));
+        dofIdx.forEach((gi, li) => {
+          for (let c = 0; c < k_b; c++) Bfull[gi][c] = Bblock[li][c];
+        });
+        embeddedBases.push(Bfull);
+      }
+      if (!embeddedBases.length) throw new Error('MBH: no valid blocks');
+
+      const Braw   = hstack(embeddedBases);
+      const allIdx = Array.from({ length: N }, (_, i) => i);
+      const Bsuper = buildRigidBasis(allIdx, coords, masses);
+
+      // Project out global rigid modes: B_clean = B_raw - Bsuper @ (Bsuper^T @ B_raw)
+      const BsT_Braw  = matMul(matT(Bsuper), Braw);
+      const BsProj    = matMul(Bsuper, BsT_Braw);
+      const Bclean    = Braw.map((row, r) => row.map((v, c) => v - BsProj[r][c]));
+
+      const { U, S }            = svdThin(Bclean);
+      const Bfinal              = keepCols(U, S, SVD_THRESH);
+      if (!Bfinal[0] || !Bfinal[0].length) throw new Error('MBH: degenerate basis after projection');
+
+      const Hred                = matMul(matT(Bfinal), matMul(Hmw, Bfinal));
+      const { values, vectors } = eigh(Hred);
+      const Lmw                 = matMul(Bfinal, vectors);
+
+      return assembleModeData(symbols, coords, masses, values, Lmw, dipDeriv);
+    }
+
+    // === 5. SCENE SETUP ===
+
+    let scene, camera, renderer, moleculeGroup, arrowGroup, labelGroup;
+    let atomMeshes = [], bondMeshes = [], arrowMeshGroups = [], labelSprites = [];
+    let rotQuat = new THREE.Quaternion();
+    let showSymbols = false, showIndices = false;
+    let displayMode = 'animation', isUserInteracting = false;
+    let animationTime = 0, lastTimestamp = null;
+    let ballScale = 0.4, stickRadius = 0.12, sticksOnly = false;
+    let bondTolerance = 1.25, amplitude = 1.0, speedMultiplier = 1.0;
+
+    // ── Group selection state ──
+    let atomPickMode    = false;
+    let activeGroupIdx  = 0;
+    let groupAtoms      = [];          // Array<Set<number>>, 0-indexed atom indices
+    let rectSelectMode  = 'move';      // 'move' | 'skip'
+    let isRectSelecting = false;
+    let rectStart       = { x: 0, y: 0 };
+    const GROUP_COLORS  = [
+      0xef4444, 0x3b82f6, 0x22c55e, 0xf59e0b,
+      0xa855f7, 0xf97316, 0x06b6d4, 0xec4899
+    ];
+    const GROUP_COLORS_CSS = [
+      '#ef4444','#3b82f6','#22c55e','#f59e0b',
+      '#a855f7','#f97316','#06b6d4','#ec4899'
+    ];
+
+    function initScene() {
+      const container = document.getElementById('canvas-container');
+
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 2000);
+      camera.position.set(0, 0, 15);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      container.appendChild(renderer.domElement);
+
+      scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+      const d1 = new THREE.DirectionalLight(0xffffff, 0.7);
+      d1.position.set(10, 20, 15); scene.add(d1);
+      const d2 = new THREE.DirectionalLight(0xaaccff, 0.3);
+      d2.position.set(-10, -10, -15); scene.add(d2);
+
+      moleculeGroup = new THREE.Group();
+      arrowGroup    = new THREE.Group();
+      labelGroup    = new THREE.Group();
+      scene.add(moleculeGroup);
+      scene.add(arrowGroup);
+      scene.add(labelGroup);
+
+      setupInteraction(container);
+      window.addEventListener('resize', () => {
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container.clientWidth, container.clientHeight);
+      });
+    }
+
+    function setupInteraction(container) {
+      let prev = { x: 0, y: 0 };
+      const selRect = document.getElementById('select-rect');
+
+      // Coords relative to the canvas element (consistent for mouse+touch)
+      const getCanvasXY = e => {
+        const r = renderer.domElement.getBoundingClientRect();
+        const cx = e.touches ? e.touches[0].clientX : e.clientX;
+        const cy = e.touches ? e.touches[0].clientY : e.clientY;
+        return { x: cx - r.left, y: cy - r.top };
+      };
+      const getXY = e => e.touches
+        ? { x: e.touches[0].clientX, y: e.touches[0].clientY }
+        : { x: e.offsetX, y: e.offsetY };
+
+      const showSelRect = (a, b) => {
+        const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
+        const w = Math.abs(a.x - b.x), h = Math.abs(a.y - b.y);
+        selRect.style.cssText = `display:block;left:${x}px;top:${y}px;width:${w}px;height:${h}px;`;
+      };
+      const hideSelRect = () => { selRect.style.display = 'none'; };
+
+      const onStart = e => {
+        if (atomPickMode) {
+          isRectSelecting = true;
+          rectStart = getCanvasXY(e);
+          showSelRect(rectStart, rectStart);
+        } else {
+          isUserInteracting = true;
+          prev = getXY(e);
+        }
+      };
+      const onEnd = e => {
+        if (isRectSelecting) {
+          const end = getCanvasXY(e);
+          const moved = Math.hypot(end.x - rectStart.x, end.y - rectStart.y);
+          if (moved < 5) pickAtomAt(e);
+          else           handleRectSelect(rectStart, end);
+          hideSelRect();
+          isRectSelecting = false;
+        } else {
+          isUserInteracting = false;
+        }
+      };
+      const onMove = e => {
+        if (isRectSelecting) { showSelRect(rectStart, getCanvasXY(e)); return; }
+        if (!isUserInteracting) return;
+        const cur = getXY(e);
+        const dx = cur.x - prev.x, dy = cur.y - prev.y;
+        const dqY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), dx * 0.008);
+        const dqX = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0), dy * 0.008);
+        rotQuat.premultiply(dqY).premultiply(dqX);
+        moleculeGroup.quaternion.copy(rotQuat);
+        arrowGroup.quaternion.copy(rotQuat);
+        labelGroup.quaternion.copy(rotQuat);
+        prev = cur;
+      };
+      container.addEventListener('mousedown',  onStart);
+      document.addEventListener('mouseup',     onEnd);
+      document.addEventListener('mousemove',   onMove);
+      container.addEventListener('touchstart', onStart, { passive: false });
+      container.addEventListener('touchend',   onEnd);
+      container.addEventListener('touchmove',  onMove,  { passive: false });
+      container.addEventListener('wheel', e => {
+        camera.position.z = Math.max(3, Math.min(200, camera.position.z + e.deltaY * 0.05));
+      });
+    }
+
+    // === 5b. ATOM GROUP SELECTION ===
+
+    const _raycaster = new THREE.Raycaster();
+
+    function setAtomPickMode(on) {
+      atomPickMode = on;
+      document.getElementById('select-mode-btn').classList.toggle('active', on);
+      document.getElementById('canvas-container').classList.toggle('atom-pick-mode', on);
+    }
+
+    function updateAtomGroupColors() {
+      const useGroupColors = document.getElementById('group-colors-cb')?.checked ?? true;
+      atomMeshes.forEach((mesh, i) => {
+        const elem = currentMoleculeData?.atoms[i]?.element || 'C';
+        const gIdx = useGroupColors ? groupAtoms.findIndex(s => s.has(i)) : -1;
+        if (gIdx >= 0) {
+          mesh.material.color.setHex(GROUP_COLORS[gIdx % GROUP_COLORS.length]);
+          mesh.material.emissive.setHex(activeGroupIdx === gIdx ? 0x221100 : 0x000000);
+        } else {
+          mesh.material.color.setHex(ELEMENT_COLORS[elem] || ELEMENT_COLORS.DEFAULT);
+          mesh.material.emissive.setHex(0x000000);
+        }
+      });
+    }
+
+    function updateGroupChips() {
+      const container = document.getElementById('group-chips');
+      container.innerHTML = '';
+      groupAtoms.forEach((s, idx) => {
+        const chip = document.createElement('div');
+        chip.className = 'group-chip' + (idx === activeGroupIdx ? ' active-chip' : '');
+        const colorCSS = GROUP_COLORS_CSS[idx % GROUP_COLORS_CSS.length];
+        chip.innerHTML = `<span class="chip-dot" style="background:${colorCSS}"></span>`
+          + `<span>G${idx+1} (${s.size})</span>`
+          + `<span class="chip-x">✕</span>`;
+        chip.addEventListener('click', e => {
+          if (e.target.classList.contains('chip-x')) removeGroup(idx);
+          else setActiveGroup(idx);
+        });
+        container.appendChild(chip);
+      });
+    }
+
+    function addGroup() {
+      groupAtoms.push(new Set());
+      activeGroupIdx = groupAtoms.length - 1;
+      updateGroupChips();
+      updateAtomGroupColors();
+    }
+
+    function removeGroup(idx) {
+      groupAtoms.splice(idx, 1);
+      activeGroupIdx = Math.min(activeGroupIdx, Math.max(0, groupAtoms.length - 1));
+      if (!groupAtoms.length) groupAtoms.push(new Set());
+      updateGroupChips();
+      updateAtomGroupColors();
+      syncGroupInput();
+    }
+
+    function setActiveGroup(idx) {
+      activeGroupIdx = idx;
+      updateGroupChips();
+      updateAtomGroupColors();
+    }
+
+    function toggleAtom(atomIdx) {
+      const wasInActive = groupAtoms[activeGroupIdx]?.has(atomIdx);
+      groupAtoms.forEach(s => s.delete(atomIdx));
+      if (!wasInActive) {
+        if (!groupAtoms[activeGroupIdx]) groupAtoms[activeGroupIdx] = new Set();
+        groupAtoms[activeGroupIdx].add(atomIdx);
+      }
+      updateGroupChips();
+      updateAtomGroupColors();
+      syncGroupInput();
+    }
+
+    function pickAtomAt(e) {
+      if (!atomMeshes.length) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      const cx = e.touches ? e.touches[0].clientX : e.clientX;
+      const cy = e.touches ? e.touches[0].clientY : e.clientY;
+      _raycaster.setFromCamera(
+        new THREE.Vector2(
+          ((cx - rect.left) / rect.width)  *  2 - 1,
+          ((cy - rect.top)  / rect.height) * -2 + 1
+        ), camera
+      );
+      const hits = _raycaster.intersectObjects(atomMeshes);
+      if (hits.length > 0) toggleAtom(hits[0].object.userData.atomIndex);
+    }
+
+    function handleRectSelect(a, b) {
+      if (!atomMeshes.length) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      // Convert canvas-relative px to NDC
+      const ndcX1 = (Math.min(a.x, b.x) / rect.width)  * 2 - 1;
+      const ndcX2 = (Math.max(a.x, b.x) / rect.width)  * 2 - 1;
+      // Canvas Y is flipped vs NDC Y
+      const ndcY1 = (Math.min(a.y, b.y) / rect.height) * -2 + 1;
+      const ndcY2 = (Math.max(a.y, b.y) / rect.height) * -2 + 1;
+      const yMin = Math.min(ndcY1, ndcY2), yMax = Math.max(ndcY1, ndcY2);
+      const tmp  = new THREE.Vector3();
+      atomMeshes.forEach((mesh, i) => {
+        mesh.getWorldPosition(tmp);
+        tmp.project(camera);
+        if (tmp.x >= ndcX1 && tmp.x <= ndcX2 && tmp.y >= yMin && tmp.y <= yMax) {
+          if (rectSelectMode === 'skip') {
+            const alreadyGrouped = groupAtoms.some(s => s.has(i));
+            if (alreadyGrouped) return;
+            if (!groupAtoms[activeGroupIdx]) groupAtoms[activeGroupIdx] = new Set();
+            groupAtoms[activeGroupIdx].add(i);
+          } else {
+            toggleAtom(i);
+          }
+        }
+      });
+      updateGroupChips();
+      updateAtomGroupColors();
+      syncGroupInput();
+    }
+
+    function syncGroupInput() {
+      document.getElementById('group-input').value =
+        groupAtoms.map(s => [...s].map(i => i+1).sort((a,b) => a-b).join(',')).join(' | ');
+    }
+
+    function getActiveGroups() {
+      return groupAtoms.map(s => [...s]).filter(g => g.length > 0);
+    }
+
+    function resetGroups() {
+      groupAtoms      = [new Set()];
+      activeGroupIdx  = 0;
+      updateGroupChips();
+      updateAtomGroupColors();
+      syncGroupInput();
+    }
+
+    // === 6. MOLECULE RENDERING ===
+
+    function detectBonds(atoms, tolerance) {
+      const bonds = [];
+      for (let i = 0; i < atoms.length; i++)
+        for (let j = i + 1; j < atoms.length; j++) {
+          const ri = COVALENT_RADII[atoms[i].element] || COVALENT_RADII.DEFAULT;
+          const rj = COVALENT_RADII[atoms[j].element] || COVALENT_RADII.DEFAULT;
+          const dx = atoms[i].x - atoms[j].x, dy = atoms[i].y - atoms[j].y, dz = atoms[i].z - atoms[j].z;
+          const distSq = dx*dx + dy*dy + dz*dz;
+          const thresh = tolerance * (ri + rj);
+          if (distSq < thresh * thresh && distSq > 0.01) bonds.push([i, j]);
+        }
+      return bonds;
+    }
+
+    const _sphereGeo = new THREE.SphereGeometry(1, 32, 32);
+    const _cylGeo    = (() => { const g = new THREE.CylinderGeometry(1,1,1,12); g.rotateX(Math.PI/2); return g; })();
+
+    function renderMolecule(atoms, bonds) {
+      while (moleculeGroup.children.length > 0) {
+        const c = moleculeGroup.children[0]; moleculeGroup.remove(c);
+        if (c.material) c.material.dispose();
+      }
+      atomMeshes = []; bondMeshes = [];
+
+      atoms.forEach((atom, i) => {
+        const r   = VDW_RADII[atom.element] || VDW_RADII.DEFAULT;
+        const mat = new THREE.MeshStandardMaterial({
+          color: ELEMENT_COLORS[atom.element] || ELEMENT_COLORS.DEFAULT,
+          roughness: 0.35, metalness: 0.3
+        });
+        const mesh = new THREE.Mesh(_sphereGeo, mat);
+        mesh.scale.setScalar(sticksOnly ? 0 : r * ballScale);
+        mesh.position.set(atom.x, atom.y, atom.z);
+        mesh.userData = { type: 'atom', atomIndex: i };
+        moleculeGroup.add(mesh); atomMeshes.push(mesh);
+      });
+
+      const bondMat = new THREE.MeshStandardMaterial({ color: 0x9ca3af, roughness: 0.4, metalness: 0.6 });
+      bonds.forEach(([i, j]) => {
+        const v1 = new THREE.Vector3(atoms[i].x, atoms[i].y, atoms[i].z);
+        const v2 = new THREE.Vector3(atoms[j].x, atoms[j].y, atoms[j].z);
+        const mesh = new THREE.Mesh(_cylGeo, bondMat);
+        setBondTransform(mesh, v1, v2);
+        moleculeGroup.add(mesh); bondMeshes.push(mesh);
+      });
+
+      let maxDistSq = 0;
+      atoms.forEach(a => { const d = a.x*a.x+a.y*a.y+a.z*a.z; if (d > maxDistSq) maxDistSq = d; });
+      rotQuat.set(0, 0, 0, 1);
+      moleculeGroup.quaternion.copy(rotQuat);
+      arrowGroup.quaternion.copy(rotQuat);
+      labelGroup.quaternion.copy(rotQuat);
+      camera.position.set(0, 0, Math.max(10, Math.sqrt(maxDistSq) * 2.5));
+      camera.lookAt(0, 0, 0);
+      updateAtomGroupColors();
+    }
+
+    function setBondTransform(mesh, v1, v2) {
+      const mid  = v1.clone().add(v2).multiplyScalar(0.5);
+      const dist = v1.distanceTo(v2);
+      const dir  = v2.clone().sub(v1).normalize();
+      mesh.position.copy(mid);
+      mesh.scale.set(stickRadius, stickRadius, dist);
+      const up = new THREE.Vector3(0, 0, 1);
+      if (Math.abs(dir.dot(up) + 1) < 0.0001) mesh.quaternion.set(1, 0, 0, 0);
+      else mesh.quaternion.setFromUnitVectors(up, dir);
+    }
+
+    // === 7. ARROW RENDERING ===
+
+    let arrowLength     = 3.0;
+    const MIN_DISP_FRAC = 0.01;
+    const ARROW_COLOR   = 0x00FFAA;
+
+    function buildArrows(atoms, mode) {
+      while (arrowGroup.children.length > 0) {
+        const g = arrowGroup.children[0]; arrowGroup.remove(g);
+        g.traverse(c => { if (c.geometry) c.geometry.dispose(); if (c.material) c.material.dispose(); });
+      }
+      arrowMeshGroups = [];
+
+      const mags   = mode.displacements.map(d => Math.sqrt(d.dx*d.dx + d.dy*d.dy + d.dz*d.dz));
+      const maxMag = Math.max(...mags);
+      if (maxMag === 0) return;
+
+      const arrowMat = new THREE.MeshStandardMaterial({ color: ARROW_COLOR, roughness: 0.3, metalness: 0.2 });
+
+      atoms.forEach((atom, i) => {
+        const group = new THREE.Group();
+        group.position.set(atom.x, atom.y, atom.z);
+        const frac = mags[i] / maxMag;
+        if (frac >= MIN_DISP_FRAC) {
+          const totalLen = arrowLength * frac;
+          const shaftLen = totalLen * 0.78;
+          const headLen  = totalLen * 0.22;
+          const shaftGeo = new THREE.CylinderGeometry(0.055, 0.055, shaftLen, 8);
+          shaftGeo.translate(0, shaftLen / 2, 0);
+          group.add(new THREE.Mesh(shaftGeo, arrowMat));
+          const headGeo = new THREE.ConeGeometry(0.13, headLen, 8);
+          headGeo.translate(0, shaftLen + headLen / 2, 0);
+          group.add(new THREE.Mesh(headGeo, arrowMat));
+          const dir = new THREE.Vector3(mode.displacements[i].dx, mode.displacements[i].dy, mode.displacements[i].dz).normalize();
+          const up  = new THREE.Vector3(0, 1, 0);
+          if (Math.abs(dir.dot(up) + 1) < 0.0001) group.quaternion.set(1, 0, 0, 0);
+          else group.quaternion.setFromUnitVectors(up, dir);
+        }
+        arrowGroup.add(group); arrowMeshGroups.push(group);
+      });
+      arrowGroup.quaternion.copy(rotQuat);
+      arrowGroup.visible = (displayMode === 'quiver' || displayMode === 'both');
+    }
+
+    function updateArrowPositions() {
+      atomMeshes.forEach((mesh, i) => { if (arrowMeshGroups[i]) arrowMeshGroups[i].position.copy(mesh.position); });
+    }
+
+    function makeTextSprite(text) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 128; canvas.height = 64;
+      const ctx = canvas.getContext('2d');
+      ctx.font = 'bold 44px Arial, sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillText(text, 65, 34);
+      ctx.fillStyle = '#ffffff'; ctx.fillText(text, 64, 32);
+      const tex = new THREE.CanvasTexture(canvas);
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.set(1.2, 0.6, 1.0);
+      return sprite;
+    }
+
+    function buildLabels(atoms) {
+      while (labelGroup.children.length > 0) {
+        const s = labelGroup.children[0]; labelGroup.remove(s);
+        if (s.material) { if (s.material.map) s.material.map.dispose(); s.material.dispose(); }
+      }
+      labelSprites = [];
+      if (!showSymbols && !showIndices) { labelGroup.visible = false; return; }
+      atoms.forEach((atom, i) => {
+        const text = (showSymbols && showIndices) ? `${atom.element}${i+1}`
+                   : showSymbols ? atom.element : `${i+1}`;
+        const sprite = makeTextSprite(text);
+        sprite.position.set(atom.x, atom.y, atom.z);
+        labelGroup.add(sprite); labelSprites.push(sprite);
+      });
+      labelGroup.visible = true;
+      labelGroup.quaternion.copy(rotQuat);
+    }
+
+    function updateLabelPositions() {
+      if (!labelGroup.visible) return;
+      atomMeshes.forEach((mesh, i) => { if (labelSprites[i]) labelSprites[i].position.copy(mesh.position); });
+    }
+
+    // === 8. ANIMATION LOOP ===
+
+    const ANIM_PERIOD = 2.0;
+
+    function updateDisplay(t) {
+      if (!currentMode || !currentMoleculeData) return;
+      const offset = (displayMode === 'animation' || displayMode === 'both')
+        ? amplitude * Math.sin(2 * Math.PI * t / ANIM_PERIOD)
+        : 0;
+      atomMeshes.forEach((mesh, i) => {
+        const a = currentMoleculeData.atoms[i];
+        const d = currentMode.displacements[i];
+        mesh.position.set(a.x + offset * d.dx, a.y + offset * d.dy, a.z + offset * d.dz);
+      });
+      if (displayMode === 'animation' || displayMode === 'both') {
+        currentBonds.forEach(([i, j], idx) => {
+          if (bondMeshes[idx]) setBondTransform(bondMeshes[idx], atomMeshes[i].position, atomMeshes[j].position);
+        });
+      }
+      if (displayMode === 'both') updateArrowPositions();
+      if (displayMode === 'animation' || displayMode === 'both') updateLabelPositions();
+    }
+
+    function animate(timestamp) {
+      requestAnimationFrame(animate);
+      if (lastTimestamp === null) lastTimestamp = timestamp;
+      const dt = (timestamp - lastTimestamp) / 1000;
+      if (currentMode && (displayMode === 'animation' || displayMode === 'both')) {
+        if (isRecording || !isUserInteracting) animationTime += dt * speedMultiplier;
+      }
+      lastTimestamp = timestamp;
+      updateDisplay(animationTime);
+      renderer.render(scene, camera);
+      if (isRecording) {
+        if (gifRecordStart === null) gifRecordStart = timestamp;
+        const frameIdx = Math.floor((timestamp - gifRecordStart) / 1000 * gifFPS);
+        if (frameIdx >= gifFramesCaptured && gifFramesCaptured < gifFramesTotal) {
+          gifOffCtx.fillStyle = '#FF00FF';
+          gifOffCtx.fillRect(0, 0, gifOffCanvas.width, gifOffCanvas.height);
+          gifOffCtx.drawImage(renderer.domElement, 0, 0, gifOffCanvas.width, gifOffCanvas.height);
+          gifEncoder.addFrame(gifOffCtx, { copy: true, delay: Math.round(1000 / gifFPS) });
+          gifFramesCaptured++;
+          document.getElementById('gif-btn').textContent = `Capturing ${gifFramesCaptured}/${gifFramesTotal}`;
+        }
+        if (gifFramesCaptured >= gifFramesTotal) {
+          isRecording = false;
+          document.getElementById('gif-btn').textContent = 'Encoding…';
+          gifEncoder.render();
+        }
+      }
+    }
+
+    // === 9. UI / EVENT HANDLERS ===
+
+    // ── Global state ──
+    let molData             = null;   // raw parsed Hessian data
+    let currentMethod       = 'NM';
+    let currentMoleculeData = null;
+    let currentMode         = null;
+    let currentBonds        = [];
+    let defaultBonds        = [];
+
+    // ── Method selector ──
+    document.querySelectorAll('.method-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        currentMethod = btn.dataset.method;
+        document.querySelectorAll('.method-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('group-section').style.display =
+          (currentMethod === 'NM') ? 'none' : 'block';
+      });
+    });
+
+    // ── Group input helpers ──
+    function buildAtomList(symbols) {
+      const el = document.getElementById('atom-list');
+      el.textContent = symbols.map((s, i) => `${i+1}:${s}`).join('  ');
+    }
+
+    document.getElementById('select-mode-btn').addEventListener('click', () => {
+      setAtomPickMode(!atomPickMode);
+    });
+    document.getElementById('group-colors-cb').addEventListener('change', () => {
+      updateAtomGroupColors();
+    });
+    document.getElementById('add-group-btn').addEventListener('click', () => { addGroup(); });
+    document.getElementById('clear-groups-btn').addEventListener('click', () => { resetGroups(); });
+
+    document.getElementById('auto-group-btn').addEventListener('click', () => {
+      if (!molData) return;
+      groupAtoms = molData.symbols.map((_, i) => new Set([i]));
+      activeGroupIdx = 0;
+      updateGroupChips(); updateAtomGroupColors(); syncGroupInput();
+    });
+
+    // Text input → parse → update groupAtoms
+    document.getElementById('group-input').addEventListener('change', e => {
+      const parsed = e.target.value.trim()
+        ? e.target.value.split('|')
+            .map(seg => new Set(seg.split(',').map(s => parseInt(s.trim()) - 1).filter(n => !isNaN(n) && n >= 0)))
+            .filter(s => s.size > 0)
+        : [];
+      if (parsed.length) {
+        groupAtoms = parsed;
+        activeGroupIdx = Math.min(activeGroupIdx, groupAtoms.length - 1);
+        updateGroupChips(); updateAtomGroupColors();
+      }
+    });
+
+    // Rect-mode toggle in Advanced
+    document.querySelectorAll('#rect-mode-bar .method-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        rectSelectMode = btn.dataset.rectmode;
+        document.querySelectorAll('#rect-mode-bar .method-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      });
+    });
+
+    // ── File upload ──
+    function handleRawFile(file) {
+      document.getElementById('status-msg').textContent = 'Parsing…';
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          molData = parseHessFile(e.target.result, file.name);
+          document.getElementById('file-name').textContent = file.name;
+          document.getElementById('status-msg').textContent =
+            `${molData.symbols.length} atoms loaded. Click Run Analysis.`;
+          document.getElementById('run-btn').disabled = false;
+          buildAtomList(molData.symbols);
+          showEquilibriumGeometry();
+        } catch (err) {
+          document.getElementById('status-msg').textContent = 'Error: ' + err.message;
+          console.error(err);
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function showEquilibriumGeometry() {
+      if (!molData) return;
+      // Center coords in-place so later analysis result is also centered
+      const cx = molData.coords.reduce((s, c) => s + c[0], 0) / molData.coords.length;
+      const cy = molData.coords.reduce((s, c) => s + c[1], 0) / molData.coords.length;
+      const cz = molData.coords.reduce((s, c) => s + c[2], 0) / molData.coords.length;
+      molData.coords = molData.coords.map(c => [c[0]-cx, c[1]-cy, c[2]-cz]);
+
+      const atoms = molData.symbols.map((el, i) => ({
+        element: el, x: molData.coords[i][0], y: molData.coords[i][1], z: molData.coords[i][2]
+      }));
+      defaultBonds = detectBonds(atoms, bondTolerance);
+      currentBonds = defaultBonds.slice();
+      updateBondTextarea(currentBonds);
+      currentMoleculeData = { atoms, modes: [] };
+      renderMolecule(atoms, currentBonds);
+      buildLabels(atoms);
+      resetGroups();
+
+      populateModeList([]);
+      currentMode = null;
+    }
+
+    // ── Run Analysis ──
+    document.getElementById('run-btn').addEventListener('click', () => {
+      if (!molData) return;
+      const btn    = document.getElementById('run-btn');
+      const status = document.getElementById('status-msg');
+      btn.disabled = true;
+      status.textContent = 'Computing…';
+
+      // Defer to next tick so "Computing…" renders before heavy work
+      setTimeout(() => {
+        try {
+          let result;
+          if (currentMethod === 'NM') {
+            result = runNM(molData);
+          } else {
+            const groups = getActiveGroups();
+            if (!groups.length) throw new Error('Assign atoms to at least one group using ✏ Select.');
+            if (currentMethod === 'PHVA') result = runPHVA(molData, groups);
+            else result = runMBH(molData, groups);
+          }
+          loadMoleculeData(result);
+          status.textContent = `Done: ${result.modes.length} modes (${currentMethod})`;
+        } catch (err) {
+          status.textContent = 'Error: ' + err.message;
+          console.error(err);
+        }
+        btn.disabled = false;
+      }, 20);
+    });
+
+    // ── Mode display ──
+    let sortMode = 'index';
+
+    function populateModeList(modes) {
+      const list = document.getElementById('mode-list');
+      list.innerHTML = '';
+      const hasIntensity = modes.some(m => m.intensity !== undefined && m.intensity > 0);
+      const sorted = [...modes].sort((a, b) =>
+        sortMode === 'freq' ? a.frequency - b.frequency : a.index - b.index);
+
+      sorted.forEach(mode => {
+        const row = document.createElement('div');
+        row.className = 'mode-row';
+        row.dataset.index = mode.index;
+        const mStr    = mode.reduced_mass != null ? `m=${mode.reduced_mass.toFixed(2)}` : 'm=N/A';
+        const metaStr = hasIntensity ? `${mStr}&nbsp;&nbsp;I=${mode.intensity.toFixed(1)}` : mStr;
+        row.innerHTML = `
+          <span class="mode-idx">#${mode.index}</span>
+          <span class="mode-freq">${mode.frequency.toFixed(1)} cm&#x207B;&#xB9;</span>
+          <span class="mode-meta">${metaStr}</span>`;
+        row.addEventListener('click', () => selectMode(mode));
+        list.appendChild(row);
+      });
+    }
+
+    function selectMode(mode) {
+      currentMode     = mode;
+      animationTime   = 0;
+      lastTimestamp   = null;
+      document.querySelectorAll('.mode-row').forEach(r => r.classList.remove('selected'));
+      const target = document.querySelector(`.mode-row[data-index="${mode.index}"]`);
+      if (target) { target.classList.add('selected'); target.scrollIntoView({ block: 'nearest' }); }
+      buildArrows(currentMoleculeData.atoms, mode);
+      drawSpectrum();
+    }
+
+    function loadMoleculeData(data) {
+      currentMoleculeData = data;
+      currentMode         = null;
+      animationTime       = 0;
+      lastTimestamp       = null;
+
+      // Center (should already be centered from showEquilibriumGeometry, but ensure it)
+      const cx = data.atoms.reduce((s, a) => s + a.x, 0) / data.atoms.length;
+      const cy = data.atoms.reduce((s, a) => s + a.y, 0) / data.atoms.length;
+      const cz = data.atoms.reduce((s, a) => s + a.z, 0) / data.atoms.length;
+      data.atoms.forEach(a => { a.x -= cx; a.y -= cy; a.z -= cz; });
+
+      defaultBonds = detectBonds(data.atoms, bondTolerance);
+      currentBonds = defaultBonds.slice();
+      updateBondTextarea(currentBonds);
+      renderMolecule(data.atoms, currentBonds);
+      buildLabels(data.atoms);
+      populateModeList(data.modes);
+
+      if (data.modes.length > 0) selectMode(data.modes[0]);
+      else drawSpectrum();
+    }
+
+    document.getElementById('sort-index-btn').addEventListener('click', () => {
+      sortMode = 'index';
+      document.getElementById('sort-index-btn').classList.add('active');
+      document.getElementById('sort-freq-btn').classList.remove('active');
+      if (currentMoleculeData) populateModeList(currentMoleculeData.modes);
+    });
+    document.getElementById('sort-freq-btn').addEventListener('click', () => {
+      sortMode = 'freq';
+      document.getElementById('sort-freq-btn').classList.add('active');
+      document.getElementById('sort-index-btn').classList.remove('active');
+      if (currentMoleculeData) populateModeList(currentMoleculeData.modes);
+    });
+
+    // ── Spectrum ──
+    let freqScale = 1.0, specFWHM = 20;
+    let _specFreqMin = 0, _specFreqMax = 4000;
+
+    function drawSpectrum() {
+      const panel = document.getElementById('spectrum-panel');
+      if (!panel.classList.contains('open')) return;
+      const canvas = document.getElementById('spectrum-canvas');
+      const ctx    = canvas.getContext('2d');
+      canvas.width  = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+      const W = canvas.width, H = canvas.height;
+      if (!W || !H) return;
+      ctx.clearRect(0, 0, W, H);
+      if (!currentMoleculeData) return;
+      const modes  = currentMoleculeData.modes;
+      const hasInt = modes.some(m => m.intensity !== undefined && m.intensity > 0);
+      if (!hasInt) {
+        ctx.fillStyle = '#6b7280'; ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('No intensity data available', W/2, H/2);
+        return;
+      }
+      const freqs  = modes.map(m => m.frequency * freqScale);
+      const ints   = modes.map(m => m.intensity || 0);
+      const maxInt = Math.max(...ints);
+      if (!maxInt) return;
+      const padFreq = Math.max(200, specFWHM * 4);
+      const fMin = Math.max(0, Math.min(...freqs) - padFreq);
+      const fMax = Math.max(...freqs) + padFreq;
+      _specFreqMin = fMin; _specFreqMax = fMax;
+      const envelope = new Float32Array(W);
+      const gamma2   = (specFWHM / 2) ** 2;
+      for (let px = 0; px < W; px++) {
+        const freq = fMin + (fMax - fMin) * px / (W - 1);
+        let sum = 0;
+        for (let k = 0; k < modes.length; k++) {
+          const dv = freq - freqs[k]; sum += ints[k] * gamma2 / (dv*dv + gamma2);
+        }
+        envelope[px] = sum;
+      }
+      const maxEnv = Math.max(...envelope, 1e-10);
+      const pad = { l:44, r:8, t:8, b:28 };
+      const plotW = W - pad.l - pad.r, plotH = H - pad.t - pad.b;
+      const toX = f => pad.l + (f - fMin) / (fMax - fMin) * plotW;
+      const toY = v => pad.t + plotH * (1 - v);
+      ctx.beginPath(); ctx.moveTo(pad.l, toY(0));
+      for (let px = 0; px < W; px++) ctx.lineTo(pad.l + px * plotW / (W-1), toY(envelope[px] / maxEnv));
+      ctx.lineTo(pad.l + plotW, toY(0)); ctx.closePath();
+      ctx.fillStyle = 'rgba(96,165,250,0.12)'; ctx.fill();
+      ctx.beginPath(); ctx.strokeStyle = '#60a5fa'; ctx.lineWidth = 1.5;
+      for (let px = 0; px < W; px++) {
+        const x = pad.l + px * plotW / (W-1), y = toY(envelope[px] / maxEnv);
+        px === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      modes.forEach((mode, k) => {
+        const x    = toX(freqs[k]);
+        const h    = ints[k] / maxInt * plotH;
+        const isSel = currentMode && currentMode.index === mode.index;
+        ctx.strokeStyle = isSel ? '#fbbf24' : 'rgba(156,163,175,0.65)';
+        ctx.lineWidth = isSel ? 2.5 : 1;
+        ctx.beginPath(); ctx.moveTo(x, pad.t + plotH); ctx.lineTo(x, pad.t + plotH - h); ctx.stroke();
+      });
+      ctx.strokeStyle = '#4b5563'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, pad.t + plotH);
+      ctx.lineTo(pad.l + plotW, pad.t + plotH); ctx.stroke();
+      ctx.fillStyle = '#6b7280'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+      const nTicks = Math.max(3, Math.floor(plotW / 75));
+      for (let t = 0; t <= nTicks; t++) {
+        const f = fMin + (fMax - fMin) * t / nTicks, x = toX(f);
+        ctx.fillText(Math.round(f), x, pad.t + plotH + 14);
+        ctx.strokeStyle = '#4b5563'; ctx.beginPath(); ctx.moveTo(x, pad.t + plotH); ctx.lineTo(x, pad.t + plotH + 3); ctx.stroke();
+      }
+      ctx.save(); ctx.translate(10, pad.t + plotH/2); ctx.rotate(-Math.PI/2);
+      ctx.fillStyle = '#6b7280'; ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('Intensity', 0, 0); ctx.restore();
+      ctx.fillStyle = '#6b7280'; ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('Wavenumber (cm⁻¹)', pad.l + plotW/2, H - 4);
+    }
+
+    // ── Display mode buttons ──
+    document.querySelectorAll('.disp-btn[data-mode]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        displayMode = btn.dataset.mode;
+        document.querySelectorAll('.disp-btn[data-mode]').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        arrowGroup.visible = (displayMode === 'quiver' || displayMode === 'both');
+        updateSliderStates();
+        if (currentMoleculeData && currentMode) {
+          atomMeshes.forEach((mesh, i) => {
+            const a = currentMoleculeData.atoms[i];
+            mesh.position.set(a.x, a.y, a.z);
+          });
+          currentBonds.forEach(([i, j], idx) => {
+            setBondTransform(bondMeshes[idx], atomMeshes[i].position, atomMeshes[j].position);
+          });
+        }
+      });
+    });
+
+    function updateSliderStates() {
+      const ampRow   = document.getElementById('amplitude-row');
+      const arrowRow = document.getElementById('arrow-len-row');
+      if (displayMode === 'quiver') {
+        ampRow.classList.add('disabled'); arrowRow.classList.remove('disabled');
+      } else if (displayMode === 'animation') {
+        ampRow.classList.remove('disabled'); arrowRow.classList.add('disabled');
+      } else {
+        ampRow.classList.remove('disabled'); arrowRow.classList.remove('disabled');
+      }
+    }
+
+    // ── Sliders ──
+    const amplitudeSlider = document.getElementById('amplitude-slider');
+    amplitudeSlider.addEventListener('input', () => {
+      amplitude = parseFloat(amplitudeSlider.value);
+      document.getElementById('amplitude-val').textContent = amplitude.toFixed(2);
+    });
+
+    const speedSlider = document.getElementById('speed-slider');
+    speedSlider.addEventListener('input', () => {
+      speedMultiplier = parseFloat(speedSlider.value);
+      document.getElementById('speed-val').textContent = speedMultiplier.toFixed(1);
+    });
+
+    const arrowLenSlider = document.getElementById('arrow-len-slider');
+    arrowLenSlider.addEventListener('input', () => {
+      arrowLength = parseFloat(arrowLenSlider.value);
+      document.getElementById('arrow-len-val').textContent = arrowLength.toFixed(1);
+      if (currentMoleculeData && currentMode) buildArrows(currentMoleculeData.atoms, currentMode);
+    });
+
+    const ballSlider = document.getElementById('ball-slider');
+    ballSlider.addEventListener('input', () => {
+      ballScale = parseFloat(ballSlider.value);
+      document.getElementById('ball-val').textContent = ballScale.toFixed(2);
+      if (!sticksOnly) applyBallScale();
+    });
+
+    const stickSlider = document.getElementById('stick-slider');
+    stickSlider.addEventListener('input', () => {
+      stickRadius = parseFloat(stickSlider.value);
+      document.getElementById('stick-val').textContent = stickRadius.toFixed(2);
+      bondMeshes.forEach(mesh => { mesh.scale.x = stickRadius; mesh.scale.y = stickRadius; });
+    });
+
+    const sticksOnlyCb = document.getElementById('sticks-only-cb');
+    sticksOnlyCb.addEventListener('change', () => {
+      sticksOnly = sticksOnlyCb.checked;
+      ballSlider.disabled = sticksOnly;
+      applyBallScale();
+    });
+
+    function applyBallScale() {
+      atomMeshes.forEach((mesh, i) => {
+        const elem = currentMoleculeData ? currentMoleculeData.atoms[i].element : 'C';
+        const r = VDW_RADII[elem] || VDW_RADII.DEFAULT;
+        mesh.scale.setScalar(sticksOnly ? 0 : r * ballScale);
+      });
+    }
+
+    // ── Checkboxes ──
+    document.getElementById('show-symbols-cb').addEventListener('change', e => {
+      showSymbols = e.target.checked;
+      if (currentMoleculeData) buildLabels(currentMoleculeData.atoms);
+    });
+    document.getElementById('show-indices-cb').addEventListener('change', e => {
+      showIndices = e.target.checked;
+      if (currentMoleculeData) buildLabels(currentMoleculeData.atoms);
+    });
+
+    // ── Advanced panel ──
+    const advToggle = document.getElementById('advanced-toggle');
+    const advBody   = document.getElementById('advanced-body');
+    advToggle.addEventListener('click', () => {
+      advBody.classList.toggle('open');
+      advToggle.textContent = advBody.classList.contains('open') ? '▾ Advanced' : '▸ Advanced';
+    });
+
+    const toleranceSlider = document.getElementById('tolerance-slider');
+    toleranceSlider.addEventListener('input', () => {
+      bondTolerance = parseFloat(toleranceSlider.value);
+      document.getElementById('tolerance-val').textContent = bondTolerance.toFixed(2) + '×';
+      if (currentMoleculeData) {
+        defaultBonds = detectBonds(currentMoleculeData.atoms, bondTolerance);
+        updateBondTextarea(defaultBonds);
+        applyBonds(defaultBonds);
+      }
+    });
+
+    document.getElementById('apply-bonds-btn').addEventListener('click', () => {
+      try {
+        const parsed = JSON.parse(document.getElementById('bond-list-textarea').value);
+        if (!Array.isArray(parsed)) throw new Error('Expected array');
+        applyBonds(parsed);
+      } catch (e) { alert('Invalid bond list JSON: ' + e.message); }
+    });
+    document.getElementById('restore-bonds-btn').addEventListener('click', () => {
+      currentBonds = defaultBonds.slice();
+      updateBondTextarea(currentBonds);
+      applyBonds(currentBonds);
+    });
+
+    function updateBondTextarea(bonds) {
+      document.getElementById('bond-list-textarea').value = JSON.stringify(bonds);
+    }
+    function applyBonds(bonds) {
+      currentBonds = bonds;
+      if (!currentMoleculeData) return;
+      renderMolecule(currentMoleculeData.atoms, bonds);
+      buildLabels(currentMoleculeData.atoms);
+      if (currentMode) buildArrows(currentMoleculeData.atoms, currentMode);
+    }
+
+    // ── File input + drag & drop ──
+    document.getElementById('file-input').addEventListener('change', e => {
+      if (e.target.files.length > 0) handleRawFile(e.target.files[0]);
+    });
+    const overlay = document.getElementById('drop-overlay');
+    window.addEventListener('dragover',  e => { e.preventDefault(); overlay.classList.add('active'); });
+    window.addEventListener('dragleave', e => { e.preventDefault(); overlay.classList.remove('active'); });
+    window.addEventListener('drop', e => {
+      e.preventDefault(); overlay.classList.remove('active');
+      if (e.dataTransfer.files.length > 0) handleRawFile(e.dataTransfer.files[0]);
+    });
+
+    // ── Spectrum panel controls ──
+    const spectrumPanel = document.getElementById('spectrum-panel');
+    const spectrumBtn   = document.getElementById('spectrum-btn');
+    spectrumBtn.addEventListener('click', () => {
+      spectrumPanel.classList.toggle('open');
+      spectrumBtn.classList.toggle('active', spectrumPanel.classList.contains('open'));
+      drawSpectrum();
+    });
+    document.getElementById('spectrum-close').addEventListener('click', () => {
+      spectrumPanel.classList.remove('open');
+      spectrumBtn.classList.remove('active');
+    });
+    document.getElementById('freq-scale').addEventListener('input', e => {
+      freqScale = parseFloat(e.target.value) || 1.0; drawSpectrum();
+    });
+    document.getElementById('spec-fwhm').addEventListener('input', e => {
+      specFWHM = Math.max(1, parseFloat(e.target.value) || 20); drawSpectrum();
+    });
+    document.getElementById('spectrum-canvas').addEventListener('click', e => {
+      if (!currentMoleculeData) return;
+      const canvas = e.currentTarget;
+      const rect = canvas.getBoundingClientRect();
+      const px = (e.clientX - rect.left) * (canvas.width / rect.width);
+      const clickFreq = _specFreqMin + (px - 44) / (canvas.width - 52) * (_specFreqMax - _specFreqMin);
+      let nearest = null, minDist = Infinity;
+      currentMoleculeData.modes.forEach(mode => {
+        const d = Math.abs(mode.frequency * freqScale - clickFreq);
+        if (d < minDist) { minDist = d; nearest = mode; }
+      });
+      if (nearest) selectMode(nearest);
+    });
+    (function () {
+      const header = document.getElementById('spectrum-header');
+      let dragging = false, ox = 0, oy = 0;
+      header.addEventListener('mousedown', e => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+        dragging = true;
+        const r = spectrumPanel.getBoundingClientRect();
+        ox = e.clientX - r.left; oy = e.clientY - r.top;
+        spectrumPanel.style.right = 'auto'; spectrumPanel.style.bottom = 'auto';
+      });
+      document.addEventListener('mousemove', e => {
+        if (!dragging) return;
+        spectrumPanel.style.left = (e.clientX - ox) + 'px';
+        spectrumPanel.style.top  = (e.clientY - oy) + 'px';
+      });
+      document.addEventListener('mouseup', () => { dragging = false; });
+    })();
+    window.addEventListener('resize', () => { drawSpectrum(); });
+
+    // ── GIF recorder ──
+    let _gifWorkerUrl = null;
+    let isRecording = false, gifFPS = 15, gifFramesTotal = 0, gifFramesCaptured = 0;
+    let gifRecordStart = null, gifOffCanvas = null, gifOffCtx = null, gifEncoder = null;
+
+    async function ensureGifWorker() {
+      if (_gifWorkerUrl) return _gifWorkerUrl;
+      const resp = await fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js');
+      if (!resp.ok) throw new Error('Could not fetch gif.js worker');
+      _gifWorkerUrl = URL.createObjectURL(await resp.blob());
+      return _gifWorkerUrl;
+    }
+
+    async function recordGIF() {
+      if (!currentMode) { alert('Select a vibration mode first.'); return; }
+      if (isRecording) return;
+      const btn    = document.getElementById('gif-btn');
+      const status = document.getElementById('gif-status');
+      const fps    = Math.max(5, Math.min(30, parseInt(document.getElementById('gif-fps').value) || 15));
+      const cycles = Math.max(1, Math.min(5,  parseInt(document.getElementById('gif-cycles').value) || 1));
+      const spcPct = parseFloat(document.getElementById('gif-size-sel').value) || 0.5;
+      btn.disabled = true; btn.textContent = 'Setting up…'; status.textContent = '';
+      let workerUrl;
+      try { workerUrl = await ensureGifWorker(); }
+      catch (e) { alert('Failed to load gif.js worker: ' + e.message); btn.disabled = false; btn.textContent = 'Record GIF'; return; }
+      const W = Math.max(1, Math.round(renderer.domElement.width  * spcPct));
+      const H = Math.max(1, Math.round(renderer.domElement.height * spcPct));
+      gifFPS = fps; gifFramesTotal = Math.round(fps * ANIM_PERIOD * cycles);
+      gifFramesCaptured = 0; gifRecordStart = null;
+      gifOffCanvas = document.createElement('canvas'); gifOffCanvas.width = W; gifOffCanvas.height = H;
+      gifOffCtx = gifOffCanvas.getContext('2d');
+      gifEncoder = new GIF({ workers: 2, quality: 10, width: W, height: H, workerScript: workerUrl, transparent: 0xFF00FF });
+      gifEncoder.on('progress', p => { btn.textContent = `Encoding ${Math.round(p*100)}%`; });
+      gifEncoder.on('finished', blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `mode${currentMode.index}_${Math.round(currentMode.frequency)}cm-1.gif`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        status.textContent = `Saved (${(blob.size/1024).toFixed(0)} KB, ${W}×${H}px)`;
+        btn.disabled = false; btn.textContent = 'Record GIF';
+      });
+      btn.disabled = false; btn.textContent = `Capturing 0/${gifFramesTotal}`;
+      isRecording = true;
+    }
+    document.getElementById('gif-btn').addEventListener('click', recordGIF);
+
+    // ── Init ──
+    window.onload = function () {
+      initScene();
+      animate();
+      updateSliderStates();
+
+      // Load example file on startup
+      fetch('../example/CH2O_orca.hess')
+        .then(r => r.ok ? r.text() : Promise.reject('fetch failed'))
+        .then(text => {
+          molData = parseHessRaw(text);
+          document.getElementById('file-name').textContent = 'CH2O_orca.hess';
+          document.getElementById('status-msg').textContent =
+            `${molData.symbols.length} atoms loaded. Click Run Analysis.`;
+          document.getElementById('run-btn').disabled = false;
+          buildAtomList(molData.symbols);
+          showEquilibriumGeometry();
+        })
+        .catch(() => {});
+    };
+
+  </script>
+</body>
+</html>
