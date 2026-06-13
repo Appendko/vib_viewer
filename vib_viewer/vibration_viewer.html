@@ -514,6 +514,110 @@
       return result;
     }
 
+    function parseORCAOut(text) {
+      const lines = text.split('\n');
+      const N = lines.length;
+
+      // Final geometry: last CARTESIAN COORDINATES (ANGSTROEM) block
+      let gStart = -1;
+      for (let i = N - 1; i >= 0; i--)
+        if (lines[i].includes('CARTESIAN COORDINATES (ANGSTROEM)')) { gStart = i; break; }
+      if (gStart < 0) throw new Error('ORCA: geometry block not found');
+
+      let i = gStart + 1;
+      while (i < N && !/^-+/.test(lines[i].trim())) i++;
+      i++; // skip dashes line
+
+      const atoms = [];
+      for (; i < N; i++) {
+        const m = lines[i].match(/^\s*([A-Za-z]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)/);
+        if (!m) break;
+        atoms.push({ element: m[1], x: +m[2], y: +m[3], z: +m[4] });
+      }
+      if (!atoms.length) throw new Error('ORCA: failed to parse atoms');
+      const nAtoms = atoms.length;
+      const nDOF = nAtoms * 3;
+
+      // Frequencies
+      const fStart = lines.findIndex(l => l.includes('VIBRATIONAL FREQUENCIES'));
+      if (fStart < 0) throw new Error('ORCA: no frequency data — add FREQ keyword to input');
+
+      const allFreqs = [];
+      for (let j = fStart + 1; j < N && allFreqs.length < nDOF; j++) {
+        const m = lines[j].match(/^\s*(\d+):\s+([-\d.]+)\s+cm\*\*-1/);
+        if (m) allFreqs.push({ idx: +m[1], freq: +m[2] });
+      }
+      const nModes = allFreqs.length;
+      if (!nModes) throw new Error('ORCA: frequency list is empty');
+
+      // Normal modes matrix [dof][modeIdx]
+      let nmStart = -1;
+      for (let j = fStart; j < N; j++)
+        if (lines[j].includes('NORMAL MODES')) { nmStart = j; break; }
+      if (nmStart < 0) throw new Error('ORCA: no NORMAL MODES section');
+
+      const modeMat = Array.from({ length: nDOF }, () => Array(nModes).fill(0));
+      // header rows: 8+ leading spaces, only integers (no decimal points)
+      const reHdr = /^\s{8,}(\d+(?:\s+\d+)+)\s*$/;
+      // data rows: 1–7 leading spaces, DOF index, then floats
+      const reRow = /^\s{1,7}(\d+)\s+([-\d.]+(?:\s+[-\d.]+)*)/;
+
+      let j = nmStart + 1;
+      while (j < N) {
+        if (lines[j].includes('IR SPECTRUM') || lines[j].includes('THERMOCHEMISTRY')) break;
+        const hm = lines[j].match(reHdr);
+        if (hm) {
+          const cols = hm[1].trim().split(/\s+/).map(Number);
+          j++;
+          for (; j < N; j++) {
+            const rm = lines[j].match(reRow);
+            if (!rm) break;
+            const dof = +rm[1];
+            const vals = rm[2].trim().split(/\s+/).map(Number);
+            cols.forEach((mi, k) => {
+              if (dof < nDOF && mi < nModes && k < vals.length)
+                modeMat[dof][mi] = vals[k];
+            });
+          }
+        } else { j++; }
+      }
+
+      // IR intensities: mode index → km/mol
+      let irStart = -1;
+      for (let k = nmStart; k < N; k++)
+        if (lines[k].includes('IR SPECTRUM')) { irStart = k; break; }
+      const irMap = {};
+      if (irStart >= 0) {
+        for (let k = irStart + 1; k < N; k++) {
+          // "  6:   1206.12   0.000280    1.41  ..."  — 3rd number is Int (km/mol)
+          const m = lines[k].match(/^\s*(\d+):\s+[\d.]+\s+[\d.]+\s+([\d.]+)/);
+          if (m) irMap[+m[1]] = +m[2];
+          else if (Object.keys(irMap).length && !lines[k].trim()) break;
+        }
+      }
+
+      // Build vibrational modes, skipping near-zero translations/rotations
+      const modes = [];
+      for (let k = 0; k < nModes; k++) {
+        const { idx, freq } = allFreqs[k];
+        if (Math.abs(freq) < 0.1) continue;
+        modes.push({
+          index: modes.length + 1,
+          frequency: freq,
+          reduced_mass: null,
+          intensity: irMap[idx] != null ? irMap[idx] : 0.0,
+          displacements: atoms.map((_, ai) => ({
+            dx: modeMat[ai * 3    ][idx],
+            dy: modeMat[ai * 3 + 1][idx],
+            dz: modeMat[ai * 3 + 2][idx]
+          }))
+        });
+      }
+      if (!modes.length) throw new Error('ORCA: no vibrational modes found after filtering');
+
+      return { title: 'ORCA Output', atoms, modes };
+    }
+
     // Auto-detect format and dispatch
     function parseFile(text, filename) {
       const ext = filename.split('.').pop().toLowerCase();
@@ -527,6 +631,9 @@
         } catch (e) {}
         return parseJSON(text);
       }
+      // Detect ORCA output by unique all-caps section markers
+      if (text.includes('VIBRATIONAL FREQUENCIES') && text.includes('NORMAL MODES'))
+        return parseORCAOut(text);
       return parseGaussianLog(text); // .log, .out, or anything else
     }
 
@@ -1047,9 +1154,10 @@
         row.className = 'mode-row';
         row.dataset.index = mode.index;
 
+        const mStr = mode.reduced_mass != null ? `m=${mode.reduced_mass.toFixed(2)}` : `m=N/A`;
         const metaStr = hasIntensity
-          ? `m=${mode.reduced_mass.toFixed(2)}&nbsp;&nbsp;I=${mode.intensity.toFixed(1)}`
-          : `m=${mode.reduced_mass.toFixed(2)}`;
+          ? `${mStr}&nbsp;&nbsp;I=${mode.intensity.toFixed(1)}`
+          : mStr;
 
         row.innerHTML = `
           <span class="mode-idx">#${mode.index}</span>
