@@ -2373,7 +2373,7 @@
       offCanvas.width = W; offCanvas.height = H;
       const offCtx = offCanvas.getContext('2d');
 
-      const encoder = new GIF({ workers: 2, quality: 8, width: W, height: H, workerScript: workerUrl, transparent: 0xFF00FF });
+      const encoder = new GIF({ workers: 2, quality: 8, width: W, height: H, workerScript: workerUrl, transparent: 0xFF40FF });
 
       encoder.on('progress', p => { btn.textContent = `Encoding ${Math.round(p * 100)}%`; });
       encoder.on('finished', blob => {
@@ -2397,15 +2397,16 @@
 
         // Use the WebGL alpha channel to identify background — not color matching.
         // Three.js renders geometry as alpha=255, background as alpha=0 (alpha:true canvas).
-        // This means the oxygen specular highlight (near-magenta but alpha=255) is kept
-        // as-is; only truly empty pixels get the transparent key color.
+        // Key color is 0xFF40FF (G=64): oxygen's specular highlight reaches G≈0-20 max,
+        // so it can never be quantized to this palette entry. 0xFF00FF (G=0) was unsafe
+        // because oxygen highlight (255,~3,~250) is within NeuQuant quantization distance.
         offCtx.clearRect(0, 0, W, H);
         offCtx.drawImage(renderer.domElement, 0, 0, W, H);
         const imgData = offCtx.getImageData(0, 0, W, H);
         const px = imgData.data;
         for (let j = 0; j < px.length; j += 4) {
           if (px[j + 3] < 255) {
-            px[j] = 0xFF; px[j+1] = 0x00; px[j+2] = 0xFF; px[j+3] = 0xFF;
+            px[j] = 0xFF; px[j+1] = 0x40; px[j+2] = 0xFF; px[j+3] = 0xFF;
           }
         }
         offCtx.putImageData(imgData, 0, 0);
