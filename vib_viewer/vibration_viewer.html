@@ -1658,7 +1658,7 @@
         const r   = VDW_RADII[atom.element] || VDW_RADII.DEFAULT;
         const mat = new THREE.MeshStandardMaterial({
           color: ELEMENT_COLORS[atom.element] || ELEMENT_COLORS.DEFAULT,
-          roughness: 0.35, metalness: 0.3
+          roughness: 0.25, metalness: 0
         });
         const mesh = new THREE.Mesh(_sphereGeo, mat);
         mesh.scale.setScalar(sticksOnly ? 0 : r * ballScale);
