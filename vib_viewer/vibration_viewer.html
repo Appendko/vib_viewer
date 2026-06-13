@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Vibration Mode Viewer</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body {
@@ -116,6 +117,46 @@
       opacity: 0; pointer-events: none; transition: opacity 0.2s;
     }
     #drop-overlay.active { opacity: 1; }
+    /* ── Spectrum Panel ── */
+    #spectrum-panel {
+      position: absolute; bottom: 16px; right: 16px;
+      width: 440px; height: 200px; min-width: 260px; min-height: 130px;
+      background: rgba(17,24,39,0.93); border: 1px solid #374151;
+      border-radius: 10px; display: none; flex-direction: column;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.6); z-index: 10; resize: both; overflow: hidden;
+    }
+    #spectrum-panel.open { display: flex; }
+    #spectrum-header {
+      display: flex; align-items: center; gap: 6px; padding: 5px 8px;
+      border-bottom: 1px solid #374151; font-size: 0.78rem; color: #9ca3af;
+      flex-shrink: 0; cursor: move; user-select: none;
+    }
+    #spectrum-header span { font-weight: 600; margin-right: 4px; }
+    #spectrum-header label { color: #6b7280; white-space: nowrap; }
+    .spec-input {
+      width: 62px; background: #111827; border: 1px solid #374151; border-radius: 4px;
+      color: #d1d5db; font-size: 0.75rem; padding: 2px 4px; text-align: right;
+    }
+    #spectrum-close {
+      margin-left: auto; background: none; border: none; color: #6b7280;
+      font-size: 0.85rem; cursor: pointer; padding: 2px 4px; border-radius: 4px;
+    }
+    #spectrum-close:hover { color: #d1d5db; background: #374151; }
+    #spectrum-canvas { flex: 1; min-height: 0; width: 100%; display: block; cursor: crosshair; }
+    #spectrum-btn.active { background: #059669; border-color: #059669; color: #fff; }
+    /* ── GIF recorder ── */
+    #gif-settings { display: flex; align-items: center; gap: 5px; margin-top: 5px; flex-wrap: wrap; }
+    #gif-settings label { font-size: 0.72rem; color: #6b7280; white-space: nowrap; }
+    .gif-input {
+      width: 40px; background: #111827; border: 1px solid #374151; border-radius: 4px;
+      color: #d1d5db; font-size: 0.75rem; padding: 2px 4px; text-align: right;
+    }
+    #gif-size-sel {
+      background: #111827; border: 1px solid #374151; border-radius: 4px;
+      color: #d1d5db; font-size: 0.75rem; padding: 2px 3px;
+    }
+    #gif-btn { width: 100%; margin-top: 5px; }
+    #gif-status { font-size: 0.72rem; color: #6b7280; text-align: center; margin-top: 3px; min-height: 1em; }
   </style>
 </head>
 <body>
@@ -176,6 +217,21 @@
         <input type="checkbox" id="show-indices-cb">
         <label for="show-indices-cb">Atom indices</label>
       </div>
+      <button class="disp-btn" id="spectrum-btn" style="width:100%;margin-top:8px">Spectrum</button>
+      <div id="gif-settings">
+        <label>FPS</label>
+        <input class="gif-input" type="number" id="gif-fps" value="15" min="5" max="30" step="1">
+        <label>Cycles</label>
+        <input class="gif-input" type="number" id="gif-cycles" value="1" min="1" max="5" step="1">
+        <label>Size</label>
+        <select id="gif-size-sel">
+          <option value="0.25">25%</option>
+          <option value="0.5" selected>50%</option>
+          <option value="1.0">100%</option>
+        </select>
+      </div>
+      <button class="disp-btn" id="gif-btn">Record GIF</button>
+      <div id="gif-status"></div>
     </div>
 
     <button id="advanced-toggle">▸ Advanced</button>
@@ -195,7 +251,19 @@
   </div>
 
   <div id="drop-overlay">Drop .log or .json file here</div>
-  <div id="canvas-container"></div>
+  <div id="canvas-container">
+    <div id="spectrum-panel">
+      <div id="spectrum-header">
+        <span>IR Spectrum</span>
+        <label>Scale</label>
+        <input class="spec-input" type="number" id="freq-scale" value="1.0000" step="0.001" min="0.5" max="2.0">
+        <label>FWHM</label>
+        <input class="spec-input" type="number" id="spec-fwhm" value="20" step="5" min="1" max="500" style="width:52px">
+        <button id="spectrum-close">✕</button>
+      </div>
+      <canvas id="spectrum-canvas"></canvas>
+    </div>
+  </div>
 
   <script>
     // === 1. ELEMENT DATA ===
@@ -394,6 +462,7 @@
     let currentBonds = [], defaultBonds = [];
     let scene, camera, renderer, moleculeGroup, arrowGroup, labelGroup;
     let atomMeshes = [], bondMeshes = [], arrowMeshGroups = [], labelSprites = [];
+    let rotQuat = new THREE.Quaternion(); // accumulated trackball rotation
     let showSymbols = false, showIndices = false;
     let displayMode = 'animation', isUserInteracting = false;
     let animationTime = 0, lastTimestamp = null;
@@ -408,7 +477,7 @@
       camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 2000);
       camera.position.set(0, 0, 15);
 
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
       renderer.setSize(container.clientWidth, container.clientHeight);
       renderer.setPixelRatio(window.devicePixelRatio);
       container.appendChild(renderer.domElement);
@@ -448,12 +517,14 @@
       const onMove  = e  => {
         if (!isUserInteracting) return;
         const cur = getXY(e);
-        moleculeGroup.rotation.y += (cur.x - prev.x) * 0.008;
-        moleculeGroup.rotation.x += (cur.y - prev.y) * 0.008;
-        arrowGroup.rotation.y = moleculeGroup.rotation.y;
-        arrowGroup.rotation.x = moleculeGroup.rotation.x;
-        labelGroup.rotation.y = moleculeGroup.rotation.y;
-        labelGroup.rotation.x = moleculeGroup.rotation.x;
+        const dx = cur.x - prev.x, dy = cur.y - prev.y;
+        // Quaternion trackball: accumulate world-space rotations — no gimbal lock
+        const dqY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), dx * 0.008);
+        const dqX = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), dy * 0.008);
+        rotQuat.premultiply(dqY).premultiply(dqX);
+        moleculeGroup.quaternion.copy(rotQuat);
+        arrowGroup.quaternion.copy(rotQuat);
+        labelGroup.quaternion.copy(rotQuat);
         prev = cur;
       };
 
@@ -539,9 +610,10 @@
       // Center camera
       let maxDistSq = 0;
       atoms.forEach(a => { const d = a.x*a.x + a.y*a.y + a.z*a.z; if (d > maxDistSq) maxDistSq = d; });
-      moleculeGroup.rotation.set(0, 0, 0);
-      arrowGroup.rotation.set(0, 0, 0);
-      labelGroup.rotation.set(0, 0, 0);
+      rotQuat.set(0, 0, 0, 1);
+      moleculeGroup.quaternion.copy(rotQuat);
+      arrowGroup.quaternion.copy(rotQuat);
+      labelGroup.quaternion.copy(rotQuat);
       camera.position.set(0, 0, Math.max(10, Math.sqrt(maxDistSq) * 2.5));
       camera.lookAt(0, 0, 0);
     }
@@ -617,7 +689,7 @@
         arrowMeshGroups.push(group);
       });
 
-      arrowGroup.rotation.copy(moleculeGroup.rotation);
+      arrowGroup.quaternion.copy(rotQuat);
       arrowGroup.visible = (displayMode === 'quiver' || displayMode === 'both');
     }
 
@@ -658,23 +730,19 @@
         const text = (showSymbols && showIndices) ? `${atom.element}${i + 1}`
                    : showSymbols ? atom.element : `${i + 1}`;
         const sprite = makeTextSprite(text);
-        const r = (VDW_RADII[atom.element] || VDW_RADII.DEFAULT) * ballScale;
-        sprite.position.set(atom.x, atom.y + r + 0.35, atom.z);
+        sprite.position.set(atom.x, atom.y, atom.z);
         labelGroup.add(sprite);
         labelSprites.push(sprite);
       });
 
       labelGroup.visible = true;
-      labelGroup.rotation.copy(moleculeGroup.rotation);
+      labelGroup.quaternion.copy(rotQuat);
     }
 
     function updateLabelPositions() {
       if (!labelGroup.visible) return;
       atomMeshes.forEach((mesh, i) => {
-        if (!labelSprites[i]) return;
-        const atom = currentMoleculeData.atoms[i];
-        const r = (VDW_RADII[atom.element] || VDW_RADII.DEFAULT) * ballScale;
-        labelSprites[i].position.set(mesh.position.x, mesh.position.y + r + 0.35, mesh.position.z);
+        if (labelSprites[i]) labelSprites[i].position.copy(mesh.position);
       });
     }
 
@@ -714,14 +782,36 @@
       requestAnimationFrame(animate);
 
       if (lastTimestamp === null) lastTimestamp = timestamp;
+      const dt = (timestamp - lastTimestamp) / 1000;
 
-      if (!isUserInteracting && currentMode && (displayMode === 'animation' || displayMode === 'both')) {
-        animationTime += (timestamp - lastTimestamp) / 1000;
+      // Always advance during recording so the captured motion is smooth
+      if (currentMode && (displayMode === 'animation' || displayMode === 'both')) {
+        if (isRecording || !isUserInteracting) animationTime += dt;
       }
       lastTimestamp = timestamp;
 
       updateDisplay(animationTime);
       renderer.render(scene, camera);
+
+      // GIF capture hook — runs inside the normal animation loop, never pauses it
+      if (isRecording) {
+        if (gifRecordStart === null) gifRecordStart = timestamp;
+        const frameIdx = Math.floor((timestamp - gifRecordStart) / 1000 * gifFPS);
+        if (frameIdx >= gifFramesCaptured && gifFramesCaptured < gifFramesTotal) {
+          gifOffCtx.fillStyle = '#FF00FF'; // chroma-key → transparent in GIF
+          gifOffCtx.fillRect(0, 0, gifOffCanvas.width, gifOffCanvas.height);
+          gifOffCtx.drawImage(renderer.domElement, 0, 0, gifOffCanvas.width, gifOffCanvas.height);
+          gifEncoder.addFrame(gifOffCtx, { copy: true, delay: Math.round(1000 / gifFPS) });
+          gifFramesCaptured++;
+          document.getElementById('gif-btn').textContent =
+            `Capturing ${gifFramesCaptured}/${gifFramesTotal}`;
+        }
+        if (gifFramesCaptured >= gifFramesTotal) {
+          isRecording = false;
+          document.getElementById('gif-btn').textContent = 'Encoding…';
+          gifEncoder.render();
+        }
+      }
     }
 
     // Amplitude slider
@@ -757,6 +847,114 @@
     }
 
     // === 7. UI / EVENT HANDLERS ===
+
+    // ── Spectrum ──
+    let freqScale = 1.0, specFWHM = 20;
+    let _specFreqMin = 0, _specFreqMax = 4000; // updated each draw for click-to-select
+
+    function drawSpectrum() {
+      const panel = document.getElementById('spectrum-panel');
+      if (!panel.classList.contains('open')) return;
+      const canvas = document.getElementById('spectrum-canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width  = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
+      const W = canvas.width, H = canvas.height;
+      if (W === 0 || H === 0) return;
+      ctx.clearRect(0, 0, W, H);
+
+      if (!currentMoleculeData) return;
+      const modes = currentMoleculeData.modes;
+      const hasInt = modes.some(m => m.intensity !== undefined && m.intensity > 0);
+      if (!hasInt) {
+        ctx.fillStyle = '#6b7280'; ctx.font = '13px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('No intensity data available', W / 2, H / 2);
+        return;
+      }
+
+      const freqs = modes.map(m => m.frequency * freqScale);
+      const ints  = modes.map(m => m.intensity || 0);
+      const maxInt = Math.max(...ints);
+      if (maxInt === 0) return;
+
+      const padFreq = Math.max(200, specFWHM * 4);
+      const fMin = Math.max(0, Math.min(...freqs) - padFreq);
+      const fMax = Math.max(...freqs) + padFreq;
+      _specFreqMin = fMin; _specFreqMax = fMax;
+
+      // Lorentzian envelope
+      const N = W;
+      const envelope = new Float32Array(N);
+      const gamma2 = (specFWHM / 2) ** 2;
+      for (let px = 0; px < N; px++) {
+        const freq = fMin + (fMax - fMin) * px / (N - 1);
+        let sum = 0;
+        for (let k = 0; k < modes.length; k++) {
+          const dv = freq - freqs[k];
+          sum += ints[k] * gamma2 / (dv * dv + gamma2);
+        }
+        envelope[px] = sum;
+      }
+      const maxEnv = Math.max(...envelope, 1e-10);
+
+      const pad = { l: 44, r: 8, t: 8, b: 28 };
+      const plotW = W - pad.l - pad.r;
+      const plotH = H - pad.t - pad.b;
+      const toX = f => pad.l + (f - fMin) / (fMax - fMin) * plotW;
+      const toY = v => pad.t + plotH * (1 - v);
+
+      // Filled envelope
+      ctx.beginPath();
+      ctx.moveTo(pad.l, toY(0));
+      for (let px = 0; px < N; px++) ctx.lineTo(pad.l + px * plotW / (N - 1), toY(envelope[px] / maxEnv));
+      ctx.lineTo(pad.l + plotW, toY(0));
+      ctx.closePath();
+      ctx.fillStyle = 'rgba(96,165,250,0.12)';
+      ctx.fill();
+
+      // Envelope line
+      ctx.beginPath();
+      ctx.strokeStyle = '#60a5fa'; ctx.lineWidth = 1.5;
+      for (let px = 0; px < N; px++) {
+        const x = pad.l + px * plotW / (N - 1), y = toY(envelope[px] / maxEnv);
+        px === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+
+      // Stick bars
+      modes.forEach((mode, k) => {
+        const x = toX(freqs[k]);
+        const h = ints[k] / maxInt * plotH;
+        const isSel = currentMode && currentMode.index === mode.index;
+        ctx.strokeStyle = isSel ? '#fbbf24' : 'rgba(156,163,175,0.65)';
+        ctx.lineWidth = isSel ? 2.5 : 1;
+        ctx.beginPath(); ctx.moveTo(x, pad.t + plotH); ctx.lineTo(x, pad.t + plotH - h); ctx.stroke();
+      });
+
+      // Axes
+      ctx.strokeStyle = '#4b5563'; ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(pad.l, pad.t); ctx.lineTo(pad.l, pad.t + plotH);
+      ctx.lineTo(pad.l + plotW, pad.t + plotH); ctx.stroke();
+
+      // X-axis ticks
+      ctx.fillStyle = '#6b7280'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center';
+      const nTicks = Math.max(3, Math.floor(plotW / 75));
+      for (let t = 0; t <= nTicks; t++) {
+        const f = fMin + (fMax - fMin) * t / nTicks, x = toX(f);
+        ctx.fillText(Math.round(f), x, pad.t + plotH + 14);
+        ctx.strokeStyle = '#4b5563'; ctx.beginPath(); ctx.moveTo(x, pad.t + plotH); ctx.lineTo(x, pad.t + plotH + 3); ctx.stroke();
+      }
+
+      // Y-axis label
+      ctx.save(); ctx.translate(10, pad.t + plotH / 2); ctx.rotate(-Math.PI / 2);
+      ctx.fillStyle = '#6b7280'; ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('Intensity', 0, 0); ctx.restore();
+
+      // X-axis label
+      ctx.fillStyle = '#6b7280'; ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('Wavenumber (cm⁻\xB9)', pad.l + plotW / 2, H - 4);
+    }
 
     let sortMode = 'index'; // 'index' | 'freq'
 
@@ -802,6 +1000,7 @@
       }
 
       buildArrows(currentMoleculeData.atoms, mode);
+      drawSpectrum();
     }
 
     // Sort buttons
@@ -818,11 +1017,11 @@
       if (currentMoleculeData) populateModeList(currentMoleculeData.modes);
     });
 
-    // Display mode buttons
-    document.querySelectorAll('.disp-btn').forEach(btn => {
+    // Display mode buttons — [data-mode] scope excludes Spectrum/Record GIF buttons
+    document.querySelectorAll('.disp-btn[data-mode]').forEach(btn => {
       btn.addEventListener('click', () => {
         displayMode = btn.dataset.mode;
-        document.querySelectorAll('.disp-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.disp-btn[data-mode]').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         if (displayMode === 'quiver' || displayMode === 'both') {
           arrowGroup.visible = true;
@@ -956,8 +1155,9 @@
       populateModeList(data.modes);
       document.getElementById('file-name').textContent = filename;
 
-      // Auto-select first mode
+      // Auto-select first mode (also redraws spectrum via selectMode)
       if (data.modes.length > 0) selectMode(data.modes[0]);
+      else drawSpectrum();
     }
 
     function handleFile(file) {
@@ -988,6 +1188,72 @@
       if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
     });
 
+    // ── Spectrum panel controls ──
+    const spectrumPanel = document.getElementById('spectrum-panel');
+    const spectrumBtn   = document.getElementById('spectrum-btn');
+
+    function openSpectrum() {
+      spectrumPanel.classList.add('open');
+      spectrumBtn.classList.add('active');
+      drawSpectrum();
+    }
+    function closeSpectrum() {
+      spectrumPanel.classList.remove('open');
+      spectrumBtn.classList.remove('active');
+    }
+
+    spectrumBtn.addEventListener('click', () => {
+      spectrumPanel.classList.contains('open') ? closeSpectrum() : openSpectrum();
+    });
+    document.getElementById('spectrum-close').addEventListener('click', closeSpectrum);
+
+    document.getElementById('freq-scale').addEventListener('input', e => {
+      freqScale = parseFloat(e.target.value) || 1.0;
+      drawSpectrum();
+    });
+    document.getElementById('spec-fwhm').addEventListener('input', e => {
+      specFWHM = Math.max(1, parseFloat(e.target.value) || 20);
+      drawSpectrum();
+    });
+
+    // Click on spectrum canvas to select nearest mode
+    document.getElementById('spectrum-canvas').addEventListener('click', e => {
+      if (!currentMoleculeData) return;
+      const canvas = e.currentTarget;
+      const rect = canvas.getBoundingClientRect();
+      const px = (e.clientX - rect.left) * (canvas.width / rect.width);
+      const plotL = 44, plotW = canvas.width - 44 - 8;
+      const clickFreq = _specFreqMin + (px - plotL) / plotW * (_specFreqMax - _specFreqMin);
+      let nearest = null, minDist = Infinity;
+      currentMoleculeData.modes.forEach(mode => {
+        const d = Math.abs(mode.frequency * freqScale - clickFreq);
+        if (d < minDist) { minDist = d; nearest = mode; }
+      });
+      if (nearest) selectMode(nearest);
+    });
+
+    // Draggable spectrum panel
+    (function () {
+      const header = document.getElementById('spectrum-header');
+      let dragging = false, ox = 0, oy = 0;
+      header.addEventListener('mousedown', e => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+        dragging = true;
+        const r = spectrumPanel.getBoundingClientRect();
+        ox = e.clientX - r.left; oy = e.clientY - r.top;
+        spectrumPanel.style.right = 'auto'; spectrumPanel.style.bottom = 'auto';
+      });
+      document.addEventListener('mousemove', e => {
+        if (!dragging) return;
+        spectrumPanel.style.left = (e.clientX - ox) + 'px';
+        spectrumPanel.style.top  = (e.clientY - oy) + 'px';
+      });
+      document.addEventListener('mouseup', () => { dragging = false; });
+    })();
+
+    // Redraw spectrum on resize
+    window.addEventListener('resize', () => { drawSpectrum(); });
+
     // Atom label checkboxes
     document.getElementById('show-symbols-cb').addEventListener('change', e => {
       showSymbols = e.target.checked;
@@ -997,6 +1263,71 @@
       showIndices = e.target.checked;
       if (currentMoleculeData) buildLabels(currentMoleculeData.atoms);
     });
+
+    // ── GIF recorder ──
+    let _gifWorkerUrl = null;
+    let isRecording = false, gifFPS = 15, gifFramesTotal = 0, gifFramesCaptured = 0;
+    let gifRecordStart = null, gifOffCanvas = null, gifOffCtx = null, gifEncoder = null;
+
+    async function ensureGifWorker() {
+      if (_gifWorkerUrl) return _gifWorkerUrl;
+      const resp = await fetch('https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js');
+      if (!resp.ok) throw new Error('Could not fetch gif.js worker');
+      _gifWorkerUrl = URL.createObjectURL(await resp.blob());
+      return _gifWorkerUrl;
+    }
+
+    async function recordGIF() {
+      if (!currentMode) { alert('Select a vibration mode first.'); return; }
+      if (isRecording) return;
+
+      const btn     = document.getElementById('gif-btn');
+      const status  = document.getElementById('gif-status');
+      const fps     = Math.max(5, Math.min(30, parseInt(document.getElementById('gif-fps').value)   || 15));
+      const cycles  = Math.max(1, Math.min(5,  parseInt(document.getElementById('gif-cycles').value) || 1));
+      const sizePct = parseFloat(document.getElementById('gif-size-sel').value) || 0.5;
+
+      btn.disabled = true; btn.textContent = 'Setting up…'; status.textContent = '';
+
+      let workerUrl;
+      try { workerUrl = await ensureGifWorker(); }
+      catch (e) {
+        alert('Failed to load gif.js worker: ' + e.message);
+        btn.disabled = false; btn.textContent = 'Record GIF'; return;
+      }
+
+      const W = Math.max(1, Math.round(renderer.domElement.width  * sizePct));
+      const H = Math.max(1, Math.round(renderer.domElement.height * sizePct));
+
+      // Set up shared state read by animate()
+      gifFPS          = fps;
+      gifFramesTotal  = Math.round(fps * ANIM_PERIOD * cycles);
+      gifFramesCaptured = 0;
+      gifRecordStart  = null;
+
+      gifOffCanvas = document.createElement('canvas');
+      gifOffCanvas.width = W; gifOffCanvas.height = H;
+      gifOffCtx = gifOffCanvas.getContext('2d');
+
+      gifEncoder = new GIF({ workers: 2, quality: 10, width: W, height: H, workerScript: workerUrl, transparent: 0xFF00FF });
+      gifEncoder.on('progress', p => { btn.textContent = `Encoding ${Math.round(p * 100)}%`; });
+      gifEncoder.on('finished', blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `mode${currentMode.index}_${Math.round(currentMode.frequency)}cm-1.gif`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        status.textContent = `Saved (${(blob.size / 1024).toFixed(0)} KB, ${W}×${H}px)`;
+        btn.disabled = false; btn.textContent = 'Record GIF';
+      });
+
+      btn.disabled = false;
+      btn.textContent = `Capturing 0/${gifFramesTotal}`;
+      isRecording = true;  // animate() takes it from here
+    }
+
+    document.getElementById('gif-btn').addEventListener('click', recordGIF);
 
     window.onload = function () {
       initScene();
