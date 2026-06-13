@@ -1,0 +1,65 @@
+{
+  "title": "Formaldehyde (CH₂O)",
+  "atoms": [
+    { "element": "H", "x": -1.12, "y":  0.94, "z":  0.00 },
+    { "element": "C", "x": -0.52, "y":  0.00, "z":  0.00 },
+    { "element": "H", "x": -1.12, "y": -0.94, "z":  0.00 },
+    { "element": "O", "x":  0.67, "y":  0.00, "z":  0.00 }
+  ],
+  "modes": [
+    {
+      "index": 1, "frequency": 1207.0314, "reduced_mass": 1.3751, "intensity": 1.4306,
+      "displacements": [
+        { "dx":  0.00, "dy":  0.00, "dz": -0.70 },
+        { "dx":  0.00, "dy":  0.00, "dz":  0.18 },
+        { "dx":  0.00, "dy":  0.00, "dz": -0.70 },
+        { "dx":  0.00, "dy":  0.00, "dz": -0.04 }
+      ]
+    },
+    {
+      "index": 2, "frequency": 1276.6863, "reduced_mass": 1.3517, "intensity": 14.8783,
+      "displacements": [
+        { "dx":  0.65, "dy":  0.25, "dz":  0.00 },
+        { "dx":  0.00, "dy": -0.15, "dz":  0.00 },
+        { "dx": -0.65, "dy":  0.25, "dz":  0.00 },
+        { "dx":  0.00, "dy":  0.08, "dz":  0.00 }
+      ]
+    },
+    {
+      "index": 3, "frequency": 1538.6422, "reduced_mass": 1.0909, "intensity": 6.5146,
+      "displacements": [
+        { "dx":  0.61, "dy":  0.36, "dz":  0.00 },
+        { "dx":  0.00, "dy":  0.00, "dz":  0.00 },
+        { "dx":  0.61, "dy": -0.36, "dz":  0.00 },
+        { "dx": -0.07, "dy":  0.00, "dz":  0.00 }
+      ]
+    },
+    {
+      "index": 4, "frequency": 1897.8069, "reduced_mass": 7.9239, "intensity": 114.8230,
+      "displacements": [
+        { "dx":  0.15, "dy":  0.45, "dz":  0.00 },
+        { "dx": -0.61, "dy":  0.00, "dz":  0.00 },
+        { "dx":  0.15, "dy": -0.45, "dz":  0.00 },
+        { "dx":  0.44, "dy":  0.00, "dz":  0.00 }
+      ]
+    },
+    {
+      "index": 5, "frequency": 2909.2693, "reduced_mass": 1.0480, "intensity": 53.1188,
+      "displacements": [
+        { "dx": -0.36, "dy":  0.61, "dz":  0.00 },
+        { "dx":  0.06, "dy":  0.00, "dz":  0.00 },
+        { "dx": -0.36, "dy": -0.61, "dz":  0.00 },
+        { "dx":  0.00, "dy":  0.00, "dz":  0.00 }
+      ]
+    },
+    {
+      "index": 6, "frequency": 2976.3586, "reduced_mass": 1.1207, "intensity": 139.0019,
+      "displacements": [
+        { "dx":  0.37, "dy": -0.60, "dz":  0.00 },
+        { "dx":  0.00, "dy":  0.10, "dz":  0.00 },
+        { "dx": -0.37, "dy": -0.60, "dz":  0.00 },
+        { "dx":  0.00, "dy":  0.00, "dz":  0.00 }
+      ]
+    }
+  ]
+}
