@@ -366,8 +366,9 @@
         <input type="range" id="tolerance-slider" min="0.8" max="1.8" step="0.05" value="1.25">
         <span class="slider-val" id="tolerance-val">1.25×</span>
       </div>
-      <div class="adv-label">Bond list (JSON)</div>
+      <div class="adv-label">Bond list (JSON) — [i, j, order]</div>
       <textarea id="bond-list-textarea" spellcheck="false"></textarea>
+      <div style="font-size:0.68rem;color:#6b7280;margin-top:2px;line-height:1.4">0=H-bond &nbsp;·&nbsp; 1=single &nbsp;·&nbsp; 1.5=aromatic &nbsp;·&nbsp; 2=double &nbsp;·&nbsp; 3=triple</div>
       <div class="adv-btns">
         <button class="adv-btn" id="apply-bonds-btn">Apply</button>
         <button class="adv-btn" id="restore-bonds-btn">Restore Default</button>
@@ -825,8 +826,10 @@
       let bonds;
       if (d.bonds && d.bonds.connections && d.bonds.connections.index) {
         const idx = d.bonds.connections.index;
+        const ord = d.bonds.order || [];
         bonds = [];
-        for (let i = 0; i < idx.length - 1; i += 2) bonds.push([idx[i], idx[i+1]]);
+        for (let i = 0; i < idx.length - 1; i += 2)
+          bonds.push([idx[i], idx[i+1], ord[i/2] !== undefined ? ord[i/2] : 1]);
       }
 
       const result = { title: d.name || 'CJSON', atoms, modes };
@@ -1381,7 +1384,7 @@
     // Mini-renderer code embedded verbatim into exported HTML snippets.
     // Kept as a string so generateSnippet() can splice it into the template.
     const SNIPPET_RENDERER = `(function(){
-  const D=DATA,ANIM_PERIOD=2.0;
+  const D=DATA,ANIM_PERIOD=2.0,SR=D.stickRadius;
   const renderer=new THREE.WebGLRenderer({antialias:true});
   renderer.setPixelRatio(devicePixelRatio);
   renderer.setSize(innerWidth,innerHeight);
@@ -1400,27 +1403,86 @@
   const mats={};
   const getMat=e=>mats[e]||(mats[e]=new THREE.MeshStandardMaterial({color:D.colors[e]??0xFF69B4,roughness:0.35,metalness:0.3}));
   const sGeo=new THREE.SphereGeometry(1,24,16);
-  const cGeoRaw=new THREE.CylinderGeometry(1,1,1,12);
-  cGeoRaw.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI/2));
+  const cGeo=new THREE.CylinderGeometry(1,1,1,12);
+  cGeo.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI/2));
+  const bondMat=new THREE.MeshStandardMaterial({color:0x9ca3af,roughness:0.4,metalness:0.6});
+  const hbondMat=new THREE.LineDashedMaterial({color:0x22d3ee,dashSize:0.25,gapSize:0.15});
+  const aromMat=new THREE.LineDashedMaterial({color:0x9ca3af,dashSize:0.2,gapSize:0.15});
   const basePos=D.atoms.map(a=>new THREE.Vector3(a.x,a.y,a.z));
   const atomMeshes=D.atoms.map((a,i)=>{
     const m=new THREE.Mesh(sGeo,getMat(a.element));
     m.scale.setScalar(D.sticksOnly?0:(D.vdw[a.element]??2)*D.ballScale);
     m.position.copy(basePos[i]); group.add(m); return m;
   });
-  function setBond(mesh,v1,v2){
-    mesh.position.copy(v1.clone().add(v2).multiplyScalar(0.5));
-    mesh.scale.set(D.stickRadius,D.stickRadius,v1.distanceTo(v2));
-    const dir=v2.clone().sub(v1).normalize();
-    const up=new THREE.Vector3(0,0,1);
-    if(Math.abs(dir.dot(up)+1)<0.0001)mesh.quaternion.set(1,0,0,0);
-    else mesh.quaternion.setFromUnitVectors(up,dir);
+  function bPerp(dir){
+    const ref=Math.abs(dir.y)<0.99?new THREE.Vector3(0,1,0):new THREE.Vector3(1,0,0);
+    return dir.clone().cross(ref).normalize();
   }
-  const bondMeshes=D.bonds.map(([i,j])=>{
-    const m=new THREE.Mesh(cGeoRaw,new THREE.MeshStandardMaterial({color:0x9ca3af,roughness:0.4,metalness:0.6}));
-    group.add(m); return m;
+  function mkCyl(v1,v2,r,mat){
+    const mid=v1.clone().add(v2).multiplyScalar(0.5),dist=v1.distanceTo(v2);
+    const dir=v2.clone().sub(v1).normalize(),m=new THREE.Mesh(cGeo,mat);
+    m.position.copy(mid); m.scale.set(r,r,dist);
+    const up=new THREE.Vector3(0,0,1);
+    if(Math.abs(dir.dot(up)+1)<0.0001)m.quaternion.set(1,0,0,0);
+    else m.quaternion.setFromUnitVectors(up,dir);
+    return m;
+  }
+  function mkLine(v1,v2,mat){
+    const geo=new THREE.BufferGeometry().setFromPoints([v1,v2]);
+    const l=new THREE.Line(geo,mat); l.computeLineDistances(); return l;
+  }
+  function upCyl(m,v1,v2,r){
+    const mid=v1.clone().add(v2).multiplyScalar(0.5),dir=v2.clone().sub(v1).normalize();
+    m.position.copy(mid); m.scale.set(r,r,v1.distanceTo(v2));
+    const up=new THREE.Vector3(0,0,1);
+    if(Math.abs(dir.dot(up)+1)<0.0001)m.quaternion.set(1,0,0,0);
+    else m.quaternion.setFromUnitVectors(up,dir);
+  }
+  function upLine(l,v1,v2){
+    const pa=l.geometry.attributes.position.array;
+    pa[0]=v1.x;pa[1]=v1.y;pa[2]=v1.z;pa[3]=v2.x;pa[4]=v2.y;pa[5]=v2.z;
+    l.geometry.attributes.position.needsUpdate=true; l.computeLineDistances();
+  }
+  function mkBond(v1,v2,ord){
+    const o=[];
+    if(ord===0){o.push(mkLine(v1,v2,hbondMat));}
+    else if(ord===2){
+      const dir=v2.clone().sub(v1).normalize(),p=bPerp(dir),off=SR*1.6,r=SR*0.72;
+      o.push(mkCyl(v1.clone().addScaledVector(p,-off/2),v2.clone().addScaledVector(p,-off/2),r,bondMat));
+      o.push(mkCyl(v1.clone().addScaledVector(p, off/2),v2.clone().addScaledVector(p, off/2),r,bondMat));
+    } else if(ord===3){
+      const dir=v2.clone().sub(v1).normalize(),p=bPerp(dir),off=SR*1.5,r=SR*0.62;
+      o.push(mkCyl(v1.clone().addScaledVector(p,-off),v2.clone().addScaledVector(p,-off),r,bondMat));
+      o.push(mkCyl(v1,v2,r,bondMat));
+      o.push(mkCyl(v1.clone().addScaledVector(p, off),v2.clone().addScaledVector(p, off),r,bondMat));
+    } else if(ord===1.5){
+      const dir=v2.clone().sub(v1).normalize(),p=bPerp(dir),off=SR*1.6,r=SR*0.72;
+      o.push(mkCyl(v1.clone().addScaledVector(p,-off/2),v2.clone().addScaledVector(p,-off/2),r,bondMat));
+      o.push(mkLine(v1.clone().addScaledVector(p,off/2),v2.clone().addScaledVector(p,off/2),aromMat));
+    } else{o.push(mkCyl(v1,v2,SR,bondMat));}
+    return o;
+  }
+  function upBond(objs,v1,v2,ord){
+    if(ord===0){upLine(objs[0],v1,v2);}
+    else if(ord===2){
+      const dir=v2.clone().sub(v1).normalize(),p=bPerp(dir),off=SR*1.6,r=SR*0.72;
+      upCyl(objs[0],v1.clone().addScaledVector(p,-off/2),v2.clone().addScaledVector(p,-off/2),r);
+      upCyl(objs[1],v1.clone().addScaledVector(p, off/2),v2.clone().addScaledVector(p, off/2),r);
+    } else if(ord===3){
+      const dir=v2.clone().sub(v1).normalize(),p=bPerp(dir),off=SR*1.5,r=SR*0.62;
+      upCyl(objs[0],v1.clone().addScaledVector(p,-off),v2.clone().addScaledVector(p,-off),r);
+      upCyl(objs[1],v1,v2,r);
+      upCyl(objs[2],v1.clone().addScaledVector(p, off),v2.clone().addScaledVector(p, off),r);
+    } else if(ord===1.5){
+      const dir=v2.clone().sub(v1).normalize(),p=bPerp(dir),off=SR*1.6,r=SR*0.72;
+      upCyl(objs[0],v1.clone().addScaledVector(p,-off/2),v2.clone().addScaledVector(p,-off/2),r);
+      upLine(objs[1],v1.clone().addScaledVector(p,off/2),v2.clone().addScaledVector(p,off/2));
+    } else{upCyl(objs[0],v1,v2,SR);}
+  }
+  const bondGroups=D.bonds.map(([i,j,ord=1])=>{
+    const objs=mkBond(basePos[i],basePos[j],ord);
+    objs.forEach(o=>group.add(o)); return objs;
   });
-  D.bonds.forEach(([i,j],k)=>setBond(bondMeshes[k],basePos[i],basePos[j]));
   let maxR=0; basePos.forEach(p=>{maxR=Math.max(maxR,p.length());});
   camera.position.z=Math.max(10,maxR*2.5);
   const arrowGroups=[];
@@ -1451,7 +1513,7 @@
       const d=D.mode.displacements[i];
       atomMeshes[i].position.set(basePos[i].x+off*d.dx,basePos[i].y+off*d.dy,basePos[i].z+off*d.dz);
     });
-    D.bonds.forEach(([i,j],k)=>setBond(bondMeshes[k],atomMeshes[i].position,atomMeshes[j].position));
+    D.bonds.forEach(([i,j,ord=1],k)=>upBond(bondGroups[k],atomMeshes[i].position,atomMeshes[j].position,ord));
     arrowGroups.forEach((g,i)=>{if(g)g.position.copy(atomMeshes[i].position);});
   }
   function animate(ts){
@@ -1791,12 +1853,130 @@
       return bonds;
     }
 
+    // Infer bond order from geometry: compare actual length to expected single-bond length.
+    function inferBondOrders(atoms, bonds) {
+      return bonds.map(([i, j]) => {
+        const ai = atoms[i], aj = atoms[j];
+        if (ai.element === 'H' || aj.element === 'H') return [i, j, 1];
+        const dist = Math.hypot(ai.x-aj.x, ai.y-aj.y, ai.z-aj.z);
+        const expected = (COVALENT_RADII[ai.element] || COVALENT_RADII.DEFAULT)
+                       + (COVALENT_RADII[aj.element] || COVALENT_RADII.DEFAULT);
+        if (dist < expected * 0.82) return [i, j, 3];
+        if (dist < expected * 0.92) return [i, j, 2];
+        return [i, j, 1];
+      });
+    }
+
+    // Detect non-covalent H···N/O/F hydrogen bonds.
+    const _HBOND_ACCEPTORS = new Set(['N', 'O', 'F']);
+    function detectHBonds(atoms, covalentBonds) {
+      const hbonds = [];
+      atoms.forEach((ai, i) => {
+        if (ai.element !== 'H') return;
+        atoms.forEach((aj, j) => {
+          if (!_HBOND_ACCEPTORS.has(aj.element)) return;
+          if (covalentBonds.some(([a, b]) => (a===i&&b===j)||(a===j&&b===i))) return;
+          const d = Math.hypot(ai.x-aj.x, ai.y-aj.y, ai.z-aj.z);
+          if (d > 1.5 && d < 3.2) hbonds.push([i, j, 0]);
+        });
+      });
+      return hbonds;
+    }
+
     const _sphereGeo = new THREE.SphereGeometry(1, 32, 32);
     const _cylGeo    = (() => { const g = new THREE.CylinderGeometry(1,1,1,12); g.rotateX(Math.PI/2); return g; })();
+
+    // Returns a unit vector perpendicular to dir (for offsetting double/triple bond cylinders).
+    function bondPerp(dir) {
+      const ref = Math.abs(dir.y) < 0.99 ? new THREE.Vector3(0,1,0) : new THREE.Vector3(1,0,0);
+      return dir.clone().cross(ref).normalize();
+    }
+
+    function _makeCyl(v1, v2, r, mat) {
+      const mid = v1.clone().add(v2).multiplyScalar(0.5);
+      const dist = v1.distanceTo(v2);
+      const dir  = v2.clone().sub(v1).normalize();
+      const m = new THREE.Mesh(_cylGeo, mat);
+      m.position.copy(mid); m.scale.set(r, r, dist);
+      const up = new THREE.Vector3(0,0,1);
+      if (Math.abs(dir.dot(up)+1) < 0.0001) m.quaternion.set(1,0,0,0);
+      else m.quaternion.setFromUnitVectors(up, dir);
+      return m;
+    }
+    function _makeLine(v1, v2, mat) {
+      const geo = new THREE.BufferGeometry().setFromPoints([v1, v2]);
+      const l = new THREE.Line(geo, mat); l.computeLineDistances(); return l;
+    }
+    function _upCyl(m, v1, v2, r) {
+      const mid = v1.clone().add(v2).multiplyScalar(0.5);
+      const dir = v2.clone().sub(v1).normalize();
+      m.position.copy(mid); m.scale.set(r, r, v1.distanceTo(v2));
+      const up = new THREE.Vector3(0,0,1);
+      if (Math.abs(dir.dot(up)+1) < 0.0001) m.quaternion.set(1,0,0,0);
+      else m.quaternion.setFromUnitVectors(up, dir);
+    }
+    function _upLine(l, v1, v2) {
+      const pa = l.geometry.attributes.position.array;
+      pa[0]=v1.x; pa[1]=v1.y; pa[2]=v1.z; pa[3]=v2.x; pa[4]=v2.y; pa[5]=v2.z;
+      l.geometry.attributes.position.needsUpdate = true; l.computeLineDistances();
+    }
+
+    // Create Three.js objects for one bond; returns array of 1–3 items.
+    function createBondObjects(v1, v2, order, sr, bondMat, hbondMat, aromMat) {
+      const objs = [];
+      if (order === 0) {
+        objs.push(_makeLine(v1, v2, hbondMat));
+      } else if (order === 2) {
+        const dir = v2.clone().sub(v1).normalize(), perp = bondPerp(dir);
+        const off = sr * 1.6, r = sr * 0.72;
+        objs.push(_makeCyl(v1.clone().addScaledVector(perp, -off/2), v2.clone().addScaledVector(perp, -off/2), r, bondMat));
+        objs.push(_makeCyl(v1.clone().addScaledVector(perp,  off/2), v2.clone().addScaledVector(perp,  off/2), r, bondMat));
+      } else if (order === 3) {
+        const dir = v2.clone().sub(v1).normalize(), perp = bondPerp(dir);
+        const off = sr * 1.5, r = sr * 0.62;
+        objs.push(_makeCyl(v1.clone().addScaledVector(perp, -off), v2.clone().addScaledVector(perp, -off), r, bondMat));
+        objs.push(_makeCyl(v1, v2, r, bondMat));
+        objs.push(_makeCyl(v1.clone().addScaledVector(perp,  off), v2.clone().addScaledVector(perp,  off), r, bondMat));
+      } else if (order === 1.5) {
+        const dir = v2.clone().sub(v1).normalize(), perp = bondPerp(dir);
+        const off = sr * 1.6, r = sr * 0.72;
+        objs.push(_makeCyl(v1.clone().addScaledVector(perp, -off/2), v2.clone().addScaledVector(perp, -off/2), r, bondMat));
+        objs.push(_makeLine(v1.clone().addScaledVector(perp,  off/2), v2.clone().addScaledVector(perp,  off/2), aromMat));
+      } else {
+        objs.push(_makeCyl(v1, v2, sr, bondMat));
+      }
+      return objs;
+    }
+
+    // Update existing bond objects in-place (called per animation frame).
+    function updateBondGroup(objs, v1, v2, order, sr) {
+      if (order === 0) {
+        _upLine(objs[0], v1, v2);
+      } else if (order === 2) {
+        const dir = v2.clone().sub(v1).normalize(), perp = bondPerp(dir);
+        const off = sr * 1.6, r = sr * 0.72;
+        _upCyl(objs[0], v1.clone().addScaledVector(perp, -off/2), v2.clone().addScaledVector(perp, -off/2), r);
+        _upCyl(objs[1], v1.clone().addScaledVector(perp,  off/2), v2.clone().addScaledVector(perp,  off/2), r);
+      } else if (order === 3) {
+        const dir = v2.clone().sub(v1).normalize(), perp = bondPerp(dir);
+        const off = sr * 1.5, r = sr * 0.62;
+        _upCyl(objs[0], v1.clone().addScaledVector(perp, -off), v2.clone().addScaledVector(perp, -off), r);
+        _upCyl(objs[1], v1, v2, r);
+        _upCyl(objs[2], v1.clone().addScaledVector(perp,  off), v2.clone().addScaledVector(perp,  off), r);
+      } else if (order === 1.5) {
+        const dir = v2.clone().sub(v1).normalize(), perp = bondPerp(dir);
+        const off = sr * 1.6, r = sr * 0.72;
+        _upCyl(objs[0], v1.clone().addScaledVector(perp, -off/2), v2.clone().addScaledVector(perp, -off/2), r);
+        _upLine(objs[1], v1.clone().addScaledVector(perp,  off/2), v2.clone().addScaledVector(perp,  off/2));
+      } else {
+        _upCyl(objs[0], v1, v2, sr);
+      }
+    }
 
     function renderMolecule(atoms, bonds) {
       while (moleculeGroup.children.length > 0) {
         const c = moleculeGroup.children[0]; moleculeGroup.remove(c);
+        if (c.isLine && c.geometry) c.geometry.dispose();
         if (c.material) c.material.dispose();
       }
       atomMeshes = []; bondMeshes = [];
@@ -1814,13 +1994,15 @@
         moleculeGroup.add(mesh); atomMeshes.push(mesh);
       });
 
-      const bondMat = new THREE.MeshStandardMaterial({ color: 0x9ca3af, roughness: 0.4, metalness: 0.6 });
-      bonds.forEach(([i, j]) => {
+      const bondMat  = new THREE.MeshStandardMaterial({ color: 0x9ca3af, roughness: 0.4, metalness: 0.6 });
+      const hbondMat = new THREE.LineDashedMaterial({ color: 0x22d3ee, dashSize: 0.25, gapSize: 0.15 });
+      const aromMat  = new THREE.LineDashedMaterial({ color: 0x9ca3af, dashSize: 0.2,  gapSize: 0.15 });
+      bonds.forEach(([i, j, order=1]) => {
         const v1 = new THREE.Vector3(atoms[i].x, atoms[i].y, atoms[i].z);
         const v2 = new THREE.Vector3(atoms[j].x, atoms[j].y, atoms[j].z);
-        const mesh = new THREE.Mesh(_cylGeo, bondMat);
-        setBondTransform(mesh, v1, v2);
-        moleculeGroup.add(mesh); bondMeshes.push(mesh);
+        const objs = createBondObjects(v1, v2, order, stickRadius, bondMat, hbondMat, aromMat);
+        objs.forEach(o => moleculeGroup.add(o));
+        bondMeshes.push(objs);
       });
 
       let maxDistSq = 0;
@@ -1832,17 +2014,6 @@
       camera.position.set(0, 0, Math.max(10, Math.sqrt(maxDistSq) * 2.5));
       camera.lookAt(0, 0, 0);
       updateAtomGroupColors();
-    }
-
-    function setBondTransform(mesh, v1, v2) {
-      const mid  = v1.clone().add(v2).multiplyScalar(0.5);
-      const dist = v1.distanceTo(v2);
-      const dir  = v2.clone().sub(v1).normalize();
-      mesh.position.copy(mid);
-      mesh.scale.set(stickRadius, stickRadius, dist);
-      const up = new THREE.Vector3(0, 0, 1);
-      if (Math.abs(dir.dot(up) + 1) < 0.0001) mesh.quaternion.set(1, 0, 0, 0);
-      else mesh.quaternion.setFromUnitVectors(up, dir);
     }
 
     // === 7. ARROW RENDERING ===
@@ -1946,8 +2117,8 @@
         mesh.position.set(a.x + offset * d.dx, a.y + offset * d.dy, a.z + offset * d.dz);
       });
       if (displayMode === 'animation' || displayMode === 'both') {
-        currentBonds.forEach(([i, j], idx) => {
-          if (bondMeshes[idx]) setBondTransform(bondMeshes[idx], atomMeshes[i].position, atomMeshes[j].position);
+        currentBonds.forEach(([i, j, order=1], idx) => {
+          if (bondMeshes[idx]) updateBondGroup(bondMeshes[idx], atomMeshes[i].position, atomMeshes[j].position, order, stickRadius);
         });
       }
       if (displayMode === 'both') updateArrowPositions();
@@ -2081,7 +2252,8 @@
       const atoms = molData.symbols.map((el, i) => ({
         element: el, x: molData.coords[i][0], y: molData.coords[i][1], z: molData.coords[i][2]
       }));
-      defaultBonds = detectBonds(atoms, bondTolerance);
+      const _rawEq = detectBonds(atoms, bondTolerance);
+      defaultBonds = inferBondOrders(atoms, _rawEq).concat(detectHBonds(atoms, _rawEq));
       currentBonds = defaultBonds.slice();
       updateBondTextarea(currentBonds);
       currentMoleculeData = { atoms, modes: [] };
@@ -2175,7 +2347,12 @@
       const cz = data.atoms.reduce((s, a) => s + a.z, 0) / data.atoms.length;
       data.atoms.forEach(a => { a.x -= cx; a.y -= cy; a.z -= cz; });
 
-      defaultBonds = detectBonds(data.atoms, bondTolerance);
+      const _rawBonds = detectBonds(data.atoms, bondTolerance);
+      if (data.bonds) {
+        defaultBonds = data.bonds.concat(detectHBonds(data.atoms, data.bonds));
+      } else {
+        defaultBonds = inferBondOrders(data.atoms, _rawBonds).concat(detectHBonds(data.atoms, _rawBonds));
+      }
       currentBonds = defaultBonds.slice();
       updateBondTextarea(currentBonds);
       renderMolecule(data.atoms, currentBonds);
@@ -2293,8 +2470,8 @@
             const a = currentMoleculeData.atoms[i];
             mesh.position.set(a.x, a.y, a.z);
           });
-          currentBonds.forEach(([i, j], idx) => {
-            setBondTransform(bondMeshes[idx], atomMeshes[i].position, atomMeshes[j].position);
+          currentBonds.forEach(([i, j, order=1], idx) => {
+            if (bondMeshes[idx]) updateBondGroup(bondMeshes[idx], atomMeshes[i].position, atomMeshes[j].position, order, stickRadius);
           });
         }
       });
@@ -2343,7 +2520,7 @@
     stickSlider.addEventListener('input', () => {
       stickRadius = parseFloat(stickSlider.value);
       document.getElementById('stick-val').textContent = stickRadius.toFixed(2);
-      bondMeshes.forEach(mesh => { mesh.scale.x = stickRadius; mesh.scale.y = stickRadius; });
+      if (currentMoleculeData) applyBonds(currentBonds);
     });
 
     const sticksOnlyCb = document.getElementById('sticks-only-cb');
@@ -2393,7 +2570,8 @@
       bondTolerance = parseFloat(toleranceSlider.value);
       document.getElementById('tolerance-val').textContent = bondTolerance.toFixed(2) + '×';
       if (currentMoleculeData) {
-        defaultBonds = detectBonds(currentMoleculeData.atoms, bondTolerance);
+        const raw = detectBonds(currentMoleculeData.atoms, bondTolerance);
+        defaultBonds = inferBondOrders(currentMoleculeData.atoms, raw).concat(detectHBonds(currentMoleculeData.atoms, raw));
         updateBondTextarea(defaultBonds);
         applyBonds(defaultBonds);
       }
@@ -2403,7 +2581,7 @@
       try {
         const parsed = JSON.parse(document.getElementById('bond-list-textarea').value);
         if (!Array.isArray(parsed)) throw new Error('Expected array');
-        applyBonds(parsed);
+        applyBonds(parsed.map(b => b.length === 2 ? [...b, 1] : b));
       } catch (e) { alert('Invalid bond list JSON: ' + e.message); }
     });
     document.getElementById('restore-bonds-btn').addEventListener('click', () => {
