@@ -2713,13 +2713,15 @@ ${SNIPPET_RENDERER}
 
     // ── Init ──
     window.onload = function () {
+      // Embedded mode must run before initScene() so canvas-container has its
+      // final layout (position:absolute;inset:0) when renderer.setSize() is called.
+      // On mobile the panel is 300px > viewport width, giving clientWidth=0 otherwise.
+      const _ep = new URLSearchParams(location.search).get('embed');
+      if (_ep === '1' || (_ep !== '0' && window.innerWidth < 768)) initEmbedMode();
+
       initScene();
       animate();
       updateSliderStates();
-
-      // Embedded/presentation mode
-      const _ep = new URLSearchParams(location.search).get('embed');
-      if (_ep === '1' || (_ep !== '0' && window.innerWidth < 768)) initEmbedMode();
 
       // Load example file on startup
       fetch('../example/CH2O_g16.log')
