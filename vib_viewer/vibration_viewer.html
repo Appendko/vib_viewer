@@ -1447,16 +1447,16 @@
     const o=[];
     if(ord===0){o.push(mkLine(v1,v2,hbondMat));}
     else if(ord===2){
-      const dir=v2.clone().sub(v1).normalize(),p=bPerp(dir),off=SR*1.6,r=SR*0.72;
+      const dir=v2.clone().sub(v1).normalize(),p=bPerp(dir),off=SR*2.5,r=SR*0.7;
       o.push(mkCyl(v1.clone().addScaledVector(p,-off/2),v2.clone().addScaledVector(p,-off/2),r,bondMat));
       o.push(mkCyl(v1.clone().addScaledVector(p, off/2),v2.clone().addScaledVector(p, off/2),r,bondMat));
     } else if(ord===3){
-      const dir=v2.clone().sub(v1).normalize(),p=bPerp(dir),off=SR*1.5,r=SR*0.62;
+      const dir=v2.clone().sub(v1).normalize(),p=bPerp(dir),off=SR*2.5,r=SR*0.6;
       o.push(mkCyl(v1.clone().addScaledVector(p,-off),v2.clone().addScaledVector(p,-off),r,bondMat));
       o.push(mkCyl(v1,v2,r,bondMat));
       o.push(mkCyl(v1.clone().addScaledVector(p, off),v2.clone().addScaledVector(p, off),r,bondMat));
     } else if(ord===1.5){
-      const dir=v2.clone().sub(v1).normalize(),p=bPerp(dir),off=SR*1.6,r=SR*0.72;
+      const dir=v2.clone().sub(v1).normalize(),p=bPerp(dir),off=SR*2.5,r=SR*0.7;
       o.push(mkCyl(v1.clone().addScaledVector(p,-off/2),v2.clone().addScaledVector(p,-off/2),r,bondMat));
       o.push(mkLine(v1.clone().addScaledVector(p,off/2),v2.clone().addScaledVector(p,off/2),aromMat));
     } else{o.push(mkCyl(v1,v2,SR,bondMat));}
@@ -1465,16 +1465,16 @@
   function upBond(objs,v1,v2,ord){
     if(ord===0){upLine(objs[0],v1,v2);}
     else if(ord===2){
-      const dir=v2.clone().sub(v1).normalize(),p=bPerp(dir),off=SR*1.6,r=SR*0.72;
+      const dir=v2.clone().sub(v1).normalize(),p=bPerp(dir),off=SR*2.5,r=SR*0.7;
       upCyl(objs[0],v1.clone().addScaledVector(p,-off/2),v2.clone().addScaledVector(p,-off/2),r);
       upCyl(objs[1],v1.clone().addScaledVector(p, off/2),v2.clone().addScaledVector(p, off/2),r);
     } else if(ord===3){
-      const dir=v2.clone().sub(v1).normalize(),p=bPerp(dir),off=SR*1.5,r=SR*0.62;
+      const dir=v2.clone().sub(v1).normalize(),p=bPerp(dir),off=SR*2.5,r=SR*0.6;
       upCyl(objs[0],v1.clone().addScaledVector(p,-off),v2.clone().addScaledVector(p,-off),r);
       upCyl(objs[1],v1,v2,r);
       upCyl(objs[2],v1.clone().addScaledVector(p, off),v2.clone().addScaledVector(p, off),r);
     } else if(ord===1.5){
-      const dir=v2.clone().sub(v1).normalize(),p=bPerp(dir),off=SR*1.6,r=SR*0.72;
+      const dir=v2.clone().sub(v1).normalize(),p=bPerp(dir),off=SR*2.5,r=SR*0.7;
       upCyl(objs[0],v1.clone().addScaledVector(p,-off/2),v2.clone().addScaledVector(p,-off/2),r);
       upLine(objs[1],v1.clone().addScaledVector(p,off/2),v2.clone().addScaledVector(p,off/2));
     } else{upCyl(objs[0],v1,v2,SR);}
@@ -1868,16 +1868,27 @@
     }
 
     // Detect non-covalent H···N/O/F hydrogen bonds.
+    // Criteria: H···A distance 1.5–2.5 Å AND D-H-A angle > 90°.
     const _HBOND_ACCEPTORS = new Set(['N', 'O', 'F']);
     function detectHBonds(atoms, covalentBonds) {
       const hbonds = [];
       atoms.forEach((ai, i) => {
         if (ai.element !== 'H') return;
+        // Find the donor atom (D) covalently bonded to this H.
+        const db = covalentBonds.find(([a, b]) => a===i || b===i);
+        if (!db) return;
+        const ad = atoms[db[0]===i ? db[1] : db[0]];
         atoms.forEach((aj, j) => {
           if (!_HBOND_ACCEPTORS.has(aj.element)) return;
           if (covalentBonds.some(([a, b]) => (a===i&&b===j)||(a===j&&b===i))) return;
           const d = Math.hypot(ai.x-aj.x, ai.y-aj.y, ai.z-aj.z);
-          if (d > 1.5 && d < 3.2) hbonds.push([i, j, 0]);
+          if (d < 1.5 || d > 2.5) return;
+          // D-H-A angle must be > 90° (vectors H→D and H→A must have cos < 0).
+          const hdx=ad.x-ai.x, hdy=ad.y-ai.y, hdz=ad.z-ai.z;
+          const hax=aj.x-ai.x, hay=aj.y-ai.y, haz=aj.z-ai.z;
+          const cosA = (hdx*hax + hdy*hay + hdz*haz) / (Math.hypot(hdx,hdy,hdz) * d);
+          if (cosA > 0) return;
+          hbonds.push([i, j, 0]);
         });
       });
       return hbonds;
@@ -1928,18 +1939,18 @@
         objs.push(_makeLine(v1, v2, hbondMat));
       } else if (order === 2) {
         const dir = v2.clone().sub(v1).normalize(), perp = bondPerp(dir);
-        const off = sr * 1.6, r = sr * 0.72;
+        const off = sr * 2.5, r = sr * 0.7;
         objs.push(_makeCyl(v1.clone().addScaledVector(perp, -off/2), v2.clone().addScaledVector(perp, -off/2), r, bondMat));
         objs.push(_makeCyl(v1.clone().addScaledVector(perp,  off/2), v2.clone().addScaledVector(perp,  off/2), r, bondMat));
       } else if (order === 3) {
         const dir = v2.clone().sub(v1).normalize(), perp = bondPerp(dir);
-        const off = sr * 1.5, r = sr * 0.62;
+        const off = sr * 2.5, r = sr * 0.6;
         objs.push(_makeCyl(v1.clone().addScaledVector(perp, -off), v2.clone().addScaledVector(perp, -off), r, bondMat));
         objs.push(_makeCyl(v1, v2, r, bondMat));
         objs.push(_makeCyl(v1.clone().addScaledVector(perp,  off), v2.clone().addScaledVector(perp,  off), r, bondMat));
       } else if (order === 1.5) {
         const dir = v2.clone().sub(v1).normalize(), perp = bondPerp(dir);
-        const off = sr * 1.6, r = sr * 0.72;
+        const off = sr * 2.5, r = sr * 0.7;
         objs.push(_makeCyl(v1.clone().addScaledVector(perp, -off/2), v2.clone().addScaledVector(perp, -off/2), r, bondMat));
         objs.push(_makeLine(v1.clone().addScaledVector(perp,  off/2), v2.clone().addScaledVector(perp,  off/2), aromMat));
       } else {
@@ -1954,18 +1965,18 @@
         _upLine(objs[0], v1, v2);
       } else if (order === 2) {
         const dir = v2.clone().sub(v1).normalize(), perp = bondPerp(dir);
-        const off = sr * 1.6, r = sr * 0.72;
+        const off = sr * 2.5, r = sr * 0.7;
         _upCyl(objs[0], v1.clone().addScaledVector(perp, -off/2), v2.clone().addScaledVector(perp, -off/2), r);
         _upCyl(objs[1], v1.clone().addScaledVector(perp,  off/2), v2.clone().addScaledVector(perp,  off/2), r);
       } else if (order === 3) {
         const dir = v2.clone().sub(v1).normalize(), perp = bondPerp(dir);
-        const off = sr * 1.5, r = sr * 0.62;
+        const off = sr * 2.5, r = sr * 0.6;
         _upCyl(objs[0], v1.clone().addScaledVector(perp, -off), v2.clone().addScaledVector(perp, -off), r);
         _upCyl(objs[1], v1, v2, r);
         _upCyl(objs[2], v1.clone().addScaledVector(perp,  off), v2.clone().addScaledVector(perp,  off), r);
       } else if (order === 1.5) {
         const dir = v2.clone().sub(v1).normalize(), perp = bondPerp(dir);
-        const off = sr * 1.6, r = sr * 0.72;
+        const off = sr * 2.5, r = sr * 0.7;
         _upCyl(objs[0], v1.clone().addScaledVector(perp, -off/2), v2.clone().addScaledVector(perp, -off/2), r);
         _upLine(objs[1], v1.clone().addScaledVector(perp,  off/2), v2.clone().addScaledVector(perp,  off/2));
       } else {
@@ -2581,7 +2592,8 @@
       try {
         const parsed = JSON.parse(document.getElementById('bond-list-textarea').value);
         if (!Array.isArray(parsed)) throw new Error('Expected array');
-        applyBonds(parsed.map(b => b.length === 2 ? [...b, 1] : b));
+        // Convert from 1-based display back to 0-based internal indices.
+        applyBonds(parsed.map(b => [b[0]-1, b[1]-1, b.length >= 3 ? b[2] : 1]));
       } catch (e) { alert('Invalid bond list JSON: ' + e.message); }
     });
     document.getElementById('restore-bonds-btn').addEventListener('click', () => {
@@ -2591,7 +2603,9 @@
     });
 
     function updateBondTextarea(bonds) {
-      document.getElementById('bond-list-textarea').value = JSON.stringify(bonds);
+      // Display 1-based atom indices so they match the atom label overlay.
+      const display = bonds.map(([i, j, order=1]) => [i+1, j+1, order]);
+      document.getElementById('bond-list-textarea').value = JSON.stringify(display);
     }
     function applyBonds(bonds) {
       currentBonds = bonds;
