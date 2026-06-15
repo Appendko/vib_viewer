@@ -1405,13 +1405,16 @@
   const basePos=D.atoms.map(a=>new THREE.Vector3(a.x,a.y,a.z));
   const atomMeshes=D.atoms.map((a,i)=>{
     const m=new THREE.Mesh(sGeo,getMat(a.element));
-    m.scale.setScalar(D.sticksOnly?0:(D.vdw[a.element]??2)*0.5*D.ballScale);
+    m.scale.setScalar(D.sticksOnly?0:(D.vdw[a.element]??2)*D.ballScale);
     m.position.copy(basePos[i]); group.add(m); return m;
   });
   function setBond(mesh,v1,v2){
     mesh.position.copy(v1.clone().add(v2).multiplyScalar(0.5));
     mesh.scale.set(D.stickRadius,D.stickRadius,v1.distanceTo(v2));
-    mesh.lookAt(v2);
+    const dir=v2.clone().sub(v1).normalize();
+    const up=new THREE.Vector3(0,0,1);
+    if(Math.abs(dir.dot(up)+1)<0.0001)mesh.quaternion.set(1,0,0,0);
+    else mesh.quaternion.setFromUnitVectors(up,dir);
   }
   const bondMeshes=D.bonds.map(([i,j])=>{
     const m=new THREE.Mesh(cGeoRaw,new THREE.MeshStandardMaterial({color:0x9ca3af,roughness:0.4,metalness:0.6}));
