@@ -1458,7 +1458,7 @@
     group.setRotationFromQuaternion(rotQuat);
     renderer.render(scene,camera);
   }
-  animate();
+  requestAnimationFrame(animate);
   let mx=0,my=0;
   renderer.domElement.addEventListener('mousedown',e=>{interacting=true;mx=e.clientX;my=e.clientY;});
   window.addEventListener('mousemove',e=>{
