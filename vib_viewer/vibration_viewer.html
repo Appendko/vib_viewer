@@ -346,6 +346,11 @@
         </div>
         <button class="disp-btn" id="gif-btn">Record GIF</button>
         <div id="gif-status"></div>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <button class="disp-btn" id="snippet-copy-btn" style="flex:1" disabled>Copy snippet</button>
+          <button class="disp-btn" id="snippet-dl-btn"   style="flex:1" disabled>Download .html</button>
+        </div>
+        <div id="snippet-status" style="font-size:0.72rem;color:#6b7280;min-height:1em;text-align:center"></div>
       </div>
     </div>
 
@@ -1371,6 +1376,129 @@
     let animationTime = 0, lastTimestamp = null;
     let ballScale = 0.4, stickRadius = 0.12, sticksOnly = false;
     let bondTolerance = 1.25, amplitude = 1.0, speedMultiplier = 1.0;
+    let isEmbedMode = false;
+
+    // Mini-renderer code embedded verbatim into exported HTML snippets.
+    // Kept as a string so generateSnippet() can splice it into the template.
+    const SNIPPET_RENDERER = `(function(){
+  const D=DATA,ANIM_PERIOD=2.0;
+  const renderer=new THREE.WebGLRenderer({antialias:true});
+  renderer.setPixelRatio(devicePixelRatio);
+  renderer.setSize(innerWidth,innerHeight);
+  document.body.appendChild(renderer.domElement);
+  window.addEventListener('resize',()=>{
+    renderer.setSize(innerWidth,innerHeight);
+    camera.aspect=innerWidth/innerHeight;
+    camera.updateProjectionMatrix();
+  });
+  const scene=new THREE.Scene();
+  const camera=new THREE.PerspectiveCamera(45,innerWidth/innerHeight,0.1,1000);
+  const group=new THREE.Group(); scene.add(group);
+  scene.add(new THREE.AmbientLight(0xffffff,0.5));
+  const d1=new THREE.DirectionalLight(0xffffff,0.7); d1.position.set(10,20,15); scene.add(d1);
+  const d2=new THREE.DirectionalLight(0xaaccff,0.3); d2.position.set(-10,-10,-15); scene.add(d2);
+  const mats={};
+  const getMat=e=>mats[e]||(mats[e]=new THREE.MeshStandardMaterial({color:D.colors[e]??0xFF69B4,roughness:0.35,metalness:0.3}));
+  const sGeo=new THREE.SphereGeometry(1,24,16);
+  const cGeoRaw=new THREE.CylinderGeometry(1,1,1,12);
+  cGeoRaw.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI/2));
+  const basePos=D.atoms.map(a=>new THREE.Vector3(a.x,a.y,a.z));
+  const atomMeshes=D.atoms.map((a,i)=>{
+    const m=new THREE.Mesh(sGeo,getMat(a.element));
+    m.scale.setScalar(D.sticksOnly?0:(D.vdw[a.element]??2)*0.5*D.ballScale);
+    m.position.copy(basePos[i]); group.add(m); return m;
+  });
+  function setBond(mesh,v1,v2){
+    mesh.position.copy(v1.clone().add(v2).multiplyScalar(0.5));
+    mesh.scale.set(D.stickRadius,D.stickRadius,v1.distanceTo(v2));
+    mesh.lookAt(v2);
+  }
+  const bondMeshes=D.bonds.map(([i,j])=>{
+    const m=new THREE.Mesh(cGeoRaw,new THREE.MeshStandardMaterial({color:0x9ca3af,roughness:0.4,metalness:0.6}));
+    group.add(m); return m;
+  });
+  D.bonds.forEach(([i,j],k)=>setBond(bondMeshes[k],basePos[i],basePos[j]));
+  let maxR=0; basePos.forEach(p=>{maxR=Math.max(maxR,p.length());});
+  camera.position.z=Math.max(10,maxR*2.5);
+  const arrowGroups=[];
+  if(D.displayMode!=='animation'){
+    const disps=D.mode.displacements;
+    const maxLen=Math.max(...disps.map(d=>Math.hypot(d.dx,d.dy,d.dz)));
+    disps.forEach((d,i)=>{
+      const len=Math.hypot(d.dx,d.dy,d.dz);
+      if(len/maxLen<0.01){arrowGroups.push(null);return;}
+      const dir=new THREE.Vector3(d.dx,d.dy,d.dz).normalize();
+      const al=(len/maxLen)*1.2;
+      const g=new THREE.Group();
+      const amat=new THREE.MeshStandardMaterial({color:0x00FFAA,roughness:0.3,metalness:0.2});
+      const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,al*0.8,8),amat);
+      shaft.position.set(0,al*0.4,0);
+      const head=new THREE.Mesh(new THREE.ConeGeometry(0.1,al*0.2,8),amat);
+      head.position.set(0,al*0.9,0);
+      g.add(shaft); g.add(head);
+      g.position.copy(basePos[i]);
+      g.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),dir);
+      group.add(g); arrowGroups.push(g);
+    });
+  }
+  let t=0,last=null,rotQuat=new THREE.Quaternion(),interacting=false;
+  function updateDisplay(t){
+    const off=D.amplitude*Math.sin(2*Math.PI*t/ANIM_PERIOD);
+    D.atoms.forEach((a,i)=>{
+      const d=D.mode.displacements[i];
+      atomMeshes[i].position.set(basePos[i].x+off*d.dx,basePos[i].y+off*d.dy,basePos[i].z+off*d.dz);
+    });
+    D.bonds.forEach(([i,j],k)=>setBond(bondMeshes[k],atomMeshes[i].position,atomMeshes[j].position));
+    arrowGroups.forEach((g,i)=>{if(g)g.position.copy(atomMeshes[i].position);});
+  }
+  function animate(ts){
+    requestAnimationFrame(animate);
+    if(last!==null&&D.displayMode!=='quiver'){if(!interacting)t+=(ts-last)/1000; updateDisplay(t);}
+    last=ts;
+    group.setRotationFromQuaternion(rotQuat);
+    renderer.render(scene,camera);
+  }
+  animate();
+  let mx=0,my=0;
+  renderer.domElement.addEventListener('mousedown',e=>{interacting=true;mx=e.clientX;my=e.clientY;});
+  window.addEventListener('mousemove',e=>{
+    if(!interacting)return;
+    const dx=(e.clientX-mx)*0.005,dy=(e.clientY-my)*0.005; mx=e.clientX; my=e.clientY;
+    rotQuat.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),dx))
+           .premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),dy));
+  });
+  window.addEventListener('mouseup',()=>interacting=false);
+  renderer.domElement.addEventListener('wheel',e=>{
+    camera.position.z=Math.max(3,Math.min(200,camera.position.z+e.deltaY*0.05));
+  },{passive:true});
+  let _pt={},_lpd=0;
+  renderer.domElement.addEventListener('touchstart',e=>{
+    e.preventDefault(); interacting=true; _pt={};
+    for(const t of e.touches)_pt[t.identifier]={x:t.clientX,y:t.clientY};
+  },{passive:false});
+  renderer.domElement.addEventListener('touchmove',e=>{
+    e.preventDefault();
+    if(e.touches.length===2){
+      const[a,b]=[e.touches[0],e.touches[1]];
+      const dist=Math.hypot(a.clientX-b.clientX,a.clientY-b.clientY);
+      if(_lpd>0)camera.position.z=Math.max(3,Math.min(200,camera.position.z*(_lpd/dist)));
+      _lpd=dist; return;
+    }
+    _lpd=0;
+    const tc=e.touches[0],p=_pt[tc.identifier];
+    if(p){
+      const dx=(tc.clientX-p.x)*0.005,dy=(tc.clientY-p.y)*0.005;
+      rotQuat.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),dx))
+             .premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),dy));
+    }
+    _pt[tc.identifier]={x:tc.clientX,y:tc.clientY};
+  },{passive:false});
+  renderer.domElement.addEventListener('touchend',e=>{
+    for(const t of e.changedTouches)delete _pt[t.identifier];
+    if(!e.touches.length){interacting=false;_lpd=0;}
+    else if(e.touches.length===1){_lpd=0;const tc=e.touches[0];_pt[tc.identifier]={x:tc.clientX,y:tc.clientY};}
+  });
+})();`;
 
     // ── Group selection state ──
     let atomPickMode    = false;
@@ -1423,6 +1551,7 @@
 
     function setupInteraction(container) {
       let prev = { x: 0, y: 0 };
+      let _lastPinchDist = 0;
       const selRect = document.getElementById('select-rect');
 
       // Coords relative to the canvas element (consistent for mouse+touch)
@@ -1461,12 +1590,27 @@
           else           handleRectSelect(rectStart, end);
           hideSelRect();
           isRectSelecting = false;
+        } else if (e.touches && e.touches.length === 1) {
+          // Transition from pinch (2 fingers) to single drag — update prev to avoid jump
+          _lastPinchDist = 0;
+          prev = { x: e.touches[0].clientX, y: e.touches[0].clientY };
         } else {
+          _lastPinchDist = 0;
           isUserInteracting = false;
         }
       };
       const onMove = e => {
         if (isRectSelecting) { showSelRect(rectStart, getCanvasXY(e)); return; }
+        // Two-finger pinch → zoom
+        if (e.touches && e.touches.length === 2) {
+          const a = e.touches[0], b = e.touches[1];
+          const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+          if (_lastPinchDist > 0)
+            camera.position.z = Math.max(3, Math.min(200, camera.position.z * (_lastPinchDist / dist)));
+          _lastPinchDist = dist;
+          return;
+        }
+        _lastPinchDist = 0;
         if (!isUserInteracting) return;
         const cur = getXY(e);
         const dx = cur.x - prev.x, dy = cur.y - prev.y;
@@ -2010,6 +2154,10 @@
       if (target) { target.classList.add('selected'); target.scrollIntoView({ block: 'nearest' }); }
       buildArrows(currentMoleculeData.atoms, mode);
       drawSpectrum();
+      updateEmbedFab();
+      ['snippet-copy-btn', 'snippet-dl-btn'].forEach(id => {
+        const b = document.getElementById(id); if (b) b.disabled = false;
+      });
     }
 
     function loadMoleculeData(data) {
@@ -2430,11 +2578,148 @@
     }
     document.getElementById('gif-btn').addEventListener('click', recordGIF);
 
+    // ── Snippet export ──
+
+    function buildColorSubset(atoms) {
+      const colors = {}, vdw = {}, cov = {};
+      for (const e of [...new Set(atoms.map(a => a.element))]) {
+        colors[e] = ELEMENT_COLORS[e]  ?? ELEMENT_COLORS.DEFAULT;
+        vdw[e]    = VDW_RADII[e]       ?? VDW_RADII.DEFAULT;
+        cov[e]    = COVALENT_RADII[e]  ?? COVALENT_RADII.DEFAULT;
+      }
+      return { colors, vdw, cov };
+    }
+
+    function generateSnippet() {
+      const { colors, vdw, cov } = buildColorSubset(currentMoleculeData.atoms);
+      const data = {
+        title: currentMoleculeData.title || '',
+        atoms: currentMoleculeData.atoms,
+        bonds: currentBonds,
+        mode:  currentMode,
+        displayMode, amplitude, ballScale, stickRadius, sticksOnly,
+        colors, vdw, cov
+      };
+      const freq  = currentMode.frequency.toFixed(0);
+      const title = data.title || 'molecule';
+      return `<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${title} – ${freq} cm⁻¹</title>
+<style>
+html,body{margin:0;width:100%;height:100%;background:#111827;overflow:hidden}
+canvas{display:block}
+#info{position:absolute;top:8px;left:50%;transform:translateX(-50%);
+  color:#6b7280;font:11px/1 system-ui;pointer-events:none;white-space:nowrap}
+</style></head><body>
+<div id="info">${title} &nbsp;| ${freq} cm⁻¹</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script>
+<script>
+const DATA=${JSON.stringify(data)};
+${SNIPPET_RENDERER}
+<\/script></body></html>`;
+    }
+
+    document.getElementById('snippet-copy-btn').addEventListener('click', () => {
+      const html = generateSnippet();
+      navigator.clipboard.writeText(html).then(() => {
+        const s = document.getElementById('snippet-status');
+        s.textContent = 'Copied!';
+        setTimeout(() => s.textContent = '', 2000);
+      });
+    });
+
+    document.getElementById('snippet-dl-btn').addEventListener('click', () => {
+      const html = generateSnippet();
+      const freq = currentMode.frequency.toFixed(0);
+      const name = (currentMoleculeData.title || 'molecule').replace(/\s+/g, '_');
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+      a.download = `${name}_${freq}cm.html`;
+      a.click();
+    });
+
+    // ── Embedded / presentation mode ──
+
+    function updateEmbedFab() {
+      const label = document.getElementById('embed-freq-label');
+      if (!label) return;
+      label.textContent = currentMode ? `${currentMode.frequency.toFixed(0)} cm⁻¹` : '—';
+    }
+
+    function initEmbedMode() {
+      isEmbedMode = true;
+
+      // Body: switch from flex row to block so canvas can fill the viewport
+      document.body.style.cssText += '; display:block; position:relative;';
+
+      // Panel becomes an absolute right-side drawer, starts off-screen
+      const panel = document.getElementById('panel');
+      panel.style.cssText += `
+        position:absolute; right:0; top:0; height:100%; z-index:50;
+        transform:translateX(100%); transition:transform 0.25s ease;
+        box-shadow:-4px 0 20px rgba(0,0,0,0.5); border-right:none;
+      `;
+
+      // Canvas fills full viewport
+      const cc = document.getElementById('canvas-container');
+      cc.style.cssText += '; position:absolute; inset:0;';
+
+      // Hide sections irrelevant to presentation use
+      ['analysis-section', 'advanced-toggle', 'advanced-body'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = 'none';
+      });
+
+      // Backdrop
+      const backdrop = document.createElement('div');
+      backdrop.id = 'embed-backdrop';
+      backdrop.style.cssText =
+        'position:absolute;inset:0;z-index:45;background:rgba(0,0,0,0.4);display:none;cursor:pointer;';
+      cc.appendChild(backdrop);
+
+      // FAB
+      const fab = document.createElement('div');
+      fab.id = 'embed-fab';
+      fab.style.cssText =
+        'position:absolute;bottom:16px;right:16px;z-index:60;display:flex;align-items:center;gap:6px;' +
+        'background:#1f2937cc;border:1px solid #374151;border-radius:999px;padding:6px 12px;cursor:pointer;' +
+        'color:#d1d5db;font:13px/1 system-ui;user-select:none;backdrop-filter:blur(4px);';
+      fab.innerHTML = '<span id="embed-freq-label">—</span><span style="font-size:16px">⚙️</span>';
+      cc.appendChild(fab);
+
+      // Close button inside panel header
+      const header = document.getElementById('panel-header');
+      header.style.position = 'relative';
+      const closeBtn = document.createElement('button');
+      closeBtn.id = 'embed-close-btn';
+      closeBtn.textContent = '✕';
+      closeBtn.style.cssText =
+        'position:absolute;top:8px;right:8px;background:none;border:none;' +
+        'color:#9ca3af;font-size:18px;cursor:pointer;line-height:1;padding:2px 4px;';
+      header.insertBefore(closeBtn, header.firstChild);
+
+      // Open / close helpers
+      const openDrawer  = () => { panel.style.transform = 'translateX(0)';    backdrop.style.display = 'block'; };
+      const closeDrawer = () => { panel.style.transform = 'translateX(100%)'; backdrop.style.display = 'none';  };
+
+      fab.addEventListener('click', () => {
+        panel.style.transform === 'translateX(0)' ? closeDrawer() : openDrawer();
+      });
+      backdrop.addEventListener('click', closeDrawer);
+      closeBtn.addEventListener('click',  closeDrawer);
+    }
+
     // ── Init ──
     window.onload = function () {
       initScene();
       animate();
       updateSliderStates();
+
+      // Embedded/presentation mode
+      const _ep = new URLSearchParams(location.search).get('embed');
+      if (_ep === '1' || (_ep !== '0' && window.innerWidth < 768)) initEmbedMode();
 
       // Load example file on startup
       fetch('../example/CH2O_g16.log')
