@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spectra Viewer</title>
+<style>
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;padding:0;overflow:hidden;background:#111827;
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  color:#f9fafb;display:flex;flex-direction:column;height:100vh}
+/* ── top bar ── */
+#top-bar{background:#1f2937;border-bottom:1px solid #374151;
+  padding:7px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+#top-bar h1{margin:0;font-size:1rem;font-weight:600;color:#f3f4f6;white-space:nowrap}
+.sep{width:1px;height:18px;background:#374151;flex-shrink:0}
+.mode-tabs{display:flex;gap:3px}
+.mode-tab{padding:4px 11px;border:1px solid #374151;border-radius:5px;
+  background:#374151;color:#d1d5db;font-size:0.8rem;cursor:pointer}
+.mode-tab.active{background:#3b82f6;border-color:#3b82f6;color:#fff}
+.top-ctl{display:flex;align-items:center;gap:6px;font-size:0.78rem;color:#9ca3af}
+.top-ctl label{cursor:pointer;display:flex;align-items:center;gap:4px}
+.top-ctl input[type=checkbox]{accent-color:#3b82f6}
+#export-btn{padding:3px 10px;border:1px solid #374151;border-radius:5px;
+  background:#374151;color:#d1d5db;font-size:0.78rem;cursor:pointer}
+#export-btn:hover{border-color:#60a5fa;color:#60a5fa}
+/* ── main ── */
+#main{display:flex;flex:1;overflow:hidden;min-height:0}
+/* ── sidebar ── */
+#sidebar{width:238px;min-width:238px;background:#1f2937;
+  border-right:1px solid #374151;display:flex;flex-direction:column;overflow:hidden}
+#dataset-list{flex:1;overflow-y:auto;padding:6px;display:flex;flex-direction:column;gap:4px}
+.ds-row{background:#111827;border:1px solid #374151;border-radius:6px;padding:5px 7px}
+.ds-hdr{display:flex;align-items:center;gap:4px;cursor:pointer;user-select:none}
+.ds-swatch{width:11px;height:11px;border-radius:2px;flex-shrink:0;cursor:pointer;border:1px solid #374151}
+.ds-eye{font-size:0.72rem;cursor:pointer;padding:0 2px;color:#4b5563}
+.ds-eye.on{color:#d1d5db}
+.ds-name{flex:1;font-size:0.76rem;color:#d1d5db;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ds-badge{font-size:0.62rem;color:#6b7280;background:#1f2937;border-radius:3px;
+  padding:1px 4px;flex-shrink:0}
+.ds-rm{font-size:0.7rem;color:#4b5563;cursor:pointer;padding:0 2px;flex-shrink:0}
+.ds-rm:hover{color:#f87171}
+.ds-ctrl{margin-top:5px;display:none;flex-direction:column;gap:3px}
+.ds-ctrl.open{display:flex}
+.c-row{display:flex;align-items:center;gap:5px;font-size:0.71rem;color:#9ca3af}
+.c-lbl{width:52px;flex-shrink:0}
+.c-presets{display:flex;gap:2px}
+.pre-btn{padding:1px 5px;border:1px solid #374151;border-radius:3px;
+  background:#374151;color:#9ca3af;font-size:0.63rem;cursor:pointer}
+.pre-btn.on{background:#3b82f6;border-color:#3b82f6;color:#fff}
+.c-num{width:58px;background:#111827;border:1px solid #374151;border-radius:3px;
+  color:#d1d5db;font-size:0.71rem;padding:2px 4px}
+.c-tog{padding:1px 7px;border:1px solid #374151;border-radius:3px;
+  background:#374151;color:#9ca3af;font-size:0.63rem;cursor:pointer}
+.c-tog.on{background:#059669;border-color:#059669;color:#fff}
+.c-sel{background:#111827;border:1px solid #374151;border-radius:3px;
+  color:#d1d5db;font-size:0.7rem;padding:2px 3px}
+/* ── global controls ── */
+#gctl{padding:7px 8px;border-top:1px solid #374151;display:flex;flex-direction:column;gap:4px;flex-shrink:0}
+.g-lbl{font-size:0.71rem;color:#9ca3af;margin-top:2px}
+.sl-row{display:flex;align-items:center;gap:5px}
+.sl-row input[type=range]{flex:1;height:3px;accent-color:#3b82f6;cursor:pointer}
+.sl-row span{font-size:0.71rem;color:#d1d5db;width:34px;text-align:right;flex-shrink:0}
+#load-btn{width:100%;padding:5px;border:1px dashed #4b5563;border-radius:6px;
+  background:transparent;color:#9ca3af;font-size:0.8rem;cursor:pointer;position:relative;margin-bottom:2px}
+#load-btn:hover{border-color:#60a5fa;color:#60a5fa}
+#load-btn input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.rng-row{display:flex;gap:4px;align-items:center}
+.rng-num{width:52px;background:#111827;border:1px solid #374151;border-radius:3px;
+  color:#d1d5db;font-size:0.71rem;padding:2px 4px}
+.rng-lbl{font-size:0.7rem;color:#6b7280}
+.ico-btn{padding:2px 7px;border:1px solid #374151;border-radius:3px;
+  background:#374151;color:#9ca3af;font-size:0.72rem;cursor:pointer}
+.ico-btn:hover{border-color:#60a5fa;color:#60a5fa}
+.ls-row{display:flex;gap:3px}
+/* ── right ── */
+#right{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+#plot-area{flex:1;position:relative;overflow:hidden;min-height:0;background:#111827}
+#plot-area canvas{display:block}
+/* stack */
+.stk-cont{height:100%;display:flex;flex-direction:column;overflow:hidden}
+.stk-row{flex:1;min-height:0;position:relative}
+.stk-lbl{position:absolute;top:4px;right:20px;font-size:0.63rem;color:#4b5563;
+  pointer-events:none;z-index:1}
+/* 2-col */
+.col2-cont{height:100%;display:flex;gap:1px}
+.col2-pane{flex:1;display:flex;flex-direction:column;min-width:0}
+.col2-sel{flex-shrink:0;margin:4px 8px;background:#1f2937;border:1px solid #374151;
+  color:#d1d5db;border-radius:4px;padding:2px 4px;font-size:0.74rem;cursor:pointer}
+/* info panel */
+#info-panel{background:#1f2937;border-top:1px solid #374151;padding:5px 12px;
+  font-size:0.76rem;min-height:26px;max-height:130px;overflow-y:auto;flex-shrink:0;color:#4b5563}
+#info-panel.has-data{color:#d1d5db}
+.inf-table{border-collapse:collapse;width:100%;font-size:0.73rem;margin-top:3px}
+.inf-table td{padding:1px 8px 1px 0;color:#d1d5db}
+.inf-table td.lbl{font-family:monospace;color:#22d3ee}
+.inf-table td.pct{color:#9ca3af}
+/* tooltip */
+#tooltip{position:fixed;display:none;pointer-events:none;
+  background:rgba(17,24,39,0.93);border:1px solid #374151;border-radius:5px;
+  padding:5px 9px;font-size:0.71rem;color:#d1d5db;z-index:200;
+  white-space:nowrap;line-height:1.65}
+.tt-proj{font-family:monospace;color:#22d3ee}
+/* scrollbar */
+::-webkit-scrollbar{width:5px}
+::-webkit-scrollbar-track{background:#1f2937}
+::-webkit-scrollbar-thumb{background:#374151;border-radius:3px}
+/* drop highlight */
+body.drag-over #plot-area::after{content:'Drop files here';position:absolute;
+  inset:0;display:flex;align-items:center;justify-content:center;
+  background:rgba(59,130,246,0.12);border:2px dashed #3b82f6;
+  font-size:1.1rem;color:#60a5fa;pointer-events:none;z-index:50}
+</style>
+</head>
+<body>
+
+<div id="top-bar">
+  <h1>Spectra Viewer</h1>
+  <div class="sep"></div>
+  <div class="mode-tabs">
+    <button class="mode-tab active" data-mode="overlay">Overlay</button>
+    <button class="mode-tab" data-mode="stack">Stack</button>
+    <button class="mode-tab" data-mode="2col">2-col</button>
+  </div>
+  <div class="sep"></div>
+  <div class="top-ctl">
+    <label><input type="checkbox" id="invert-y-cb"> Invert Y</label>
+  </div>
+  <div style="margin-left:auto">
+    <button id="export-btn">Export PNG</button>
+  </div>
+</div>
+
+<div id="main">
+  <div id="sidebar">
+    <div id="dataset-list"></div>
+    <div id="gctl">
+      <button id="load-btn">+ Load file(s)
+        <input type="file" id="file-input" multiple
+          accept=".peak,.spec,.out,.jdx,.dx,.csv,.txt,.dat">
+      </button>
+      <div class="g-lbl">Lineshape</div>
+      <div class="ls-row">
+        <button class="c-tog on" id="ls-lor">Lorentzian</button>
+        <button class="c-tog" id="ls-gau">Gaussian</button>
+      </div>
+      <div class="g-lbl">FWHM (cm⁻¹)</div>
+      <div class="sl-row">
+        <input type="range" id="fwhm-sl" min="2" max="60" step="1" value="10">
+        <span id="fwhm-val">10</span>
+      </div>
+      <div class="g-lbl">Freq range (cm⁻¹)</div>
+      <div class="rng-row">
+        <input class="rng-num" id="xmin-in" type="number" value="0">
+        <span class="rng-lbl">–</span>
+        <input class="rng-num" id="xmax-in" type="number" value="4000">
+        <button class="ico-btn" id="reset-rng" title="Reset to data range">↺</button>
+      </div>
+      <div class="g-lbl">Intensity threshold</div>
+      <div class="sl-row">
+        <input type="range" id="thresh-sl" min="0" max="100" step="0.5" value="0">
+        <span id="thresh-val">0</span>
+      </div>
+    </div>
+  </div>
+
+  <div id="right">
+    <div id="plot-area"></div>
+    <div id="info-panel">Click a peak to see its assignment / projection</div>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+// ════════════════════════════════════════════
+// 1. CONSTANTS
+// ════════════════════════════════════════════
+const PALETTE = ['#22d3ee','#f59e0b','#a78bfa','#34d399','#f87171','#60a5fa','#fb923c','#e879f9'];
+const M = {t:12, r:16, b:42, l:62}; // plot margins px
+const BRO_MIN = 0, BRO_MAX = 10000; // broadening grid range cm⁻¹
+
+// ════════════════════════════════════════════
+// 2. STATE
+// ════════════════════════════════════════════
+let datasets = [];
+let nextId = 1;
+let xRange = [0, 4000];
+let layoutMode = 'overlay';
+let globalFwhm = 10;
+let globalLineshape = 'lorentzian';
+let invertY = false;
+let intensThreshold = 0;
+let col2Ids = [null, null];
+let _raf = null;
+let _drag = false, _dragX0 = 0, _dragRange0 = null;
+let _hoverF = null;
+
+// ════════════════════════════════════════════
+// 3. PARSERS
+// ════════════════════════════════════════════
+function parseFile(name, text) {
+  const ext = name.split('.').pop().toLowerCase();
+  if (ext === 'out') return parseOut(text);
+  if (ext === 'spec') return parseSpec(text);
+  if (ext === 'peak') return parsePeak(text);
+  if (ext === 'jdx' || ext === 'dx') return parseJcamp(text);
+  if (ext === 'csv') return parseCsvTxt(text, ',');
+  // fallback: try two-col, then csv
+  const tc = parseTwoCol(text);
+  if (tc.data.length > 1) return tc;
+  return parseCsvTxt(text, ',');
+}
+
+function parsePeak(text) {
+  const data = [];
+  for (const line of text.split('\n')) {
+    const p = line.trim().split(/\s+/);
+    if (p.length >= 2) { const f=+p[0],i=+p[1]; if(isFinite(f)&&isFinite(i)) data.push({f,i}); }
+  }
+  return {type:'peaks', data};
+}
+
+function parseSpec(text) {
+  const data = [];
+  for (const line of text.split('\n')) {
+    const p = line.split(',');
+    if (p.length < 2) continue;
+    const f=+p[0].trim(), i=+p[1].trim();
+    if (!isFinite(f)||!isFinite(i)) continue;
+    const pk = {f,i};
+    if (p.length >= 4) {
+      pk.label = p[2].trim();
+      pk.proj  = parseFloat(p[3]);
+      pk.projections = [{label:pk.label, pct:pk.proj}];
+    }
+    data.push(pk);
+  }
+  return {type:'peaks', data};
+}
+
+function parseOut(text) {
+  const lines = text.split('\n');
+  let start = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].includes('Projection (to cumsum')) { start = i + 2; break; }
+  }
+  if (start < 0) return parsePeak(text);
+  const data = []; let cur = null;
+  for (let i = start; i < lines.length; i++) {
+    const line = lines[i]; if (!line.trim()) continue;
+    const p = line.split(','); if (p.length < 3) continue;
+    const f0 = p[0].trim(), f1 = p[1].trim();
+    if (f0 !== '' && f1 !== '') {
+      cur = {f:+f0, i:+f1, label:p[2].trim(), proj:parseFloat(p[3]), projections:[]};
+      cur.projections.push({label:cur.label, pct:cur.proj});
+      data.push(cur);
+    } else if (cur && f0==='' && f1==='') {
+      const lbl=p[2].trim(), pct=parseFloat(p[3]);
+      if (lbl && isFinite(pct)) cur.projections.push({label:lbl, pct});
+    }
+  }
+  return {type:'peaks', data};
+}
+
+function parseJcamp(text) {
+  const lines = text.split('\n');
+  let xFactor=1, yFactor=1, firstX=null, lastX=null, nPoints=null, mode=null;
+  const data=[];
+  for (let i=0; i<lines.length; i++) {
+    const l = lines[i].trim();
+    if (l.startsWith('##')) {
+      const eq=l.indexOf('='); if(eq<0) continue;
+      const key=l.slice(2,eq).trim().toUpperCase(), val=l.slice(eq+1).trim();
+      if(key==='XFACTOR') xFactor=+val||1;
+      else if(key==='YFACTOR') yFactor=+val||1;
+      else if(key==='FIRSTX') firstX=+val;
+      else if(key==='LASTX')  lastX=+val;
+      else if(key==='NPOINTS') nPoints=parseInt(val);
+      else if(key==='XYPOINTS') mode='xypoints';
+      else if(key==='XYDATA')   mode='xydata';
+      else if(key==='END') break;
+      continue;
+    }
+    if (!mode) continue;
+    if (mode==='xypoints') {
+      const nums=l.split(/[\s,]+/).map(Number).filter(isFinite);
+      if(nums.length>=2) data.push({f:nums[0]*xFactor, i:nums[1]*yFactor});
+    } else if (mode==='xydata') {
+      // simple numeric XYDATA: first token is X, rest are Y values spaced by deltaX
+      const nums=l.split(/\s+/).map(Number).filter(isFinite);
+      if(!nums.length) continue;
+      const x0=nums[0]*xFactor;
+      const step = (firstX!=null&&lastX!=null&&nPoints!=null&&nPoints>1)
+        ? (lastX-firstX)/(nPoints-1)*xFactor : xFactor;
+      for (let j=1; j<nums.length; j++) data.push({f:x0+(j-1)*step, i:nums[j]*yFactor});
+    }
+  }
+  return {type:'continuous', data};
+}
+
+function parseTwoCol(text) {
+  const data=[];
+  for (const line of text.split('\n')) {
+    const p=line.trim().split(/\s+/);
+    if(p.length>=2){const f=+p[0],i=+p[1];if(isFinite(f)&&isFinite(i))data.push({f,i});}
+  }
+  return {type:'continuous', data};
+}
+
+function parseCsvTxt(text, sep) {
+  const data=[];
+  for (const line of text.split('\n')) {
+    const p=line.split(sep);
+    if(p.length>=2){const f=+p[0].trim(),i=+p[1].trim();if(isFinite(f)&&isFinite(i))data.push({f,i});}
+  }
+  return {type:'continuous', data};
+}
+
+// ════════════════════════════════════════════
+// 4. BROADENING  (fixed grid 0–10000 cm⁻¹)
+// ════════════════════════════════════════════
+function computeBroadened(ds) {
+  const fwhm = ds.fwhm ?? globalFwhm;
+  const ls   = ds.lineshape ?? globalLineshape;
+  const key  = `${fwhm}|${ls}|${ds.freqScale}|${ds.freqOffset}|${intensThreshold}`;
+  if (ds._broKey === key) return ds._broCurve;
+
+  const step=1, N=BRO_MAX-BRO_MIN+1;
+  const ys = new Float64Array(N);
+  const cutoff = Math.max(40, 6*fwhm);
+  const g2 = (fwhm/2)**2;
+  const gk = 4*Math.LN2/(fwhm*fwhm);
+
+  for (const p of ds.rawData) {
+    if (p.i <= intensThreshold) continue;
+    const f0 = p.f * ds.freqScale + ds.freqOffset;
+    if (f0 < BRO_MIN - cutoff || f0 > BRO_MAX + cutoff) continue;
+    const k0 = Math.max(0, Math.floor(f0 - cutoff - BRO_MIN));
+    const k1 = Math.min(N-1, Math.ceil(f0 + cutoff - BRO_MIN));
+    const inten = p.i;
+    if (ls === 'lorentzian') {
+      for (let k=k0; k<=k1; k++) { const d=k+BRO_MIN-f0; ys[k]+=inten*g2/(d*d+g2); }
+    } else {
+      for (let k=k0; k<=k1; k++) { const d=k+BRO_MIN-f0; ys[k]+=inten*Math.exp(-gk*d*d); }
+    }
+  }
+  ds._broKey = key; ds._broCurve = ys;
+  return ys;
+}
+
+function invalidate(ds) {
+  if (ds) { delete ds._broKey; }
+  else datasets.forEach(d => { delete d._broKey; });
+}
+
+// ════════════════════════════════════════════
+// 5. PLOT DATA  (xs/ys ready to draw)
+// ════════════════════════════════════════════
+function getPlotData(ds) {
+  let xs, ys;
+  if (ds.type === 'peaks') {
+    const bro = computeBroadened(ds);
+    // xs = integer indices + BRO_MIN; subset to visible range
+    const i0 = Math.max(0, Math.floor(xRange[0] - BRO_MIN - 1));
+    const i1 = Math.min(bro.length-1, Math.ceil(xRange[1] - BRO_MIN + 1));
+    const len = i1 - i0 + 1;
+    xs = new Float64Array(len); ys = new Float64Array(len);
+    for (let i=0; i<len; i++) { xs[i]=BRO_MIN+i0+i; ys[i]=bro[i0+i]; }
+  } else {
+    const sc = ds.freqScale, off = ds.freqOffset;
+    xs = new Float64Array(ds.rawData.length);
+    ys = new Float64Array(ds.rawData.length);
+    for (let i=0; i<ds.rawData.length; i++) {
+      xs[i]=ds.rawData[i].f*sc+off; ys[i]=ds.rawData[i].i;
+    }
+  }
+  // baseline
+  if (ds.baselineMode==='constant') {
+    let mn=Infinity; for (let i=0;i<ys.length;i++) if(ys[i]<mn) mn=ys[i];
+    if (mn>0) for (let i=0;i<ys.length;i++) ys[i]-=mn;
+  } else if (ds.baselineMode==='linear') {
+    const n=ys.length;
+    if (n>1) { const sl=(ys[n-1]-ys[0])/(n-1); for(let i=0;i<n;i++) ys[i]-=ys[0]+sl*i; }
+  }
+  // scale + normalize
+  for (let i=0;i<ys.length;i++) ys[i]*=ds.scale;
+  if (ds.normalized) {
+    let mx=0; for(let i=0;i<ys.length;i++) if(ys[i]>mx) mx=ys[i];
+    if (mx>0) for(let i=0;i<ys.length;i++) ys[i]/=mx;
+  }
+  return {xs, ys};
+}
+
+function yMaxOf(ds) {
+  const {ys} = getPlotData(ds); let m=0;
+  for (let i=0;i<ys.length;i++) if(ys[i]>m) m=ys[i];
+  return m;
+}
+
+// ════════════════════════════════════════════
+// 6. CANVAS SETUP & TRANSFORMS
+// ════════════════════════════════════════════
+function setupCanvas(canvas) {
+  const r=devicePixelRatio||1, w=canvas.clientWidth, h=canvas.clientHeight;
+  if (canvas.width!==w*r||canvas.height!==h*r) {
+    canvas.width=w*r; canvas.height=h*r;
+    canvas.getContext('2d').scale(r,r);
+  }
+}
+
+function makeT(W, H, xMin, xMax, yMax) {
+  const pw=W-M.l-M.r, ph=H-M.t-M.b, xs=xMax-xMin||1;
+  return { W,H,xMin,xMax,yMax,pw,ph,
+    fx: f => M.l+(f-xMin)/xs*pw,
+    xf: px => xMin+(px-M.l)/pw*xs,
+    fy: i => invertY ? M.t+(i/yMax)*ph : M.t+ph-(i/yMax)*ph };
+}
+
+function niceStep(span, n) {
+  const r=span/n, p=Math.floor(Math.log10(r)), f=r/10**p;
+  return (f<1.5?1:f<3.5?2:f<7.5?5:10)*10**p;
+}
+
+function fmtVal(v) {
+  if(v===0)return'0'; if(v>=1e4)return(v/1e3).toFixed(0)+'k';
+  if(v>=1e3)return(v/1e3).toFixed(1)+'k'; if(v>=100)return v.toFixed(0);
+  if(v>=10)return v.toFixed(1); return v.toPrecision(2);
+}
+
+// ════════════════════════════════════════════
+// 7. DRAWING PRIMITIVES
+// ════════════════════════════════════════════
+function drawBg(ctx, W, H) {
+  ctx.fillStyle='#111827'; ctx.fillRect(0,0,W,H);
+}
+
+function drawGridLines(ctx, T) {
+  ctx.save(); ctx.strokeStyle='rgba(55,65,81,0.55)'; ctx.lineWidth=0.5;
+  const xs=niceStep(T.xMax-T.xMin,8), x0=Math.ceil(T.xMin/xs)*xs;
+  for(let x=x0;x<=T.xMax+0.5;x+=xs){const px=T.fx(x);ctx.beginPath();ctx.moveTo(px,M.t);ctx.lineTo(px,M.t+T.ph);ctx.stroke();}
+  const ys=niceStep(T.yMax,5), inv=invertY;
+  for(let y=0;y<=T.yMax+0.5*ys;y+=ys){const py=T.fy(y);ctx.beginPath();ctx.moveTo(M.l,py);ctx.lineTo(M.l+T.pw,py);ctx.stroke();}
+  ctx.restore();
+}
+
+function drawAxes(ctx, T, showXLabel) {
+  ctx.save();
+  ctx.strokeStyle='#4b5563'; ctx.lineWidth=1;
+  ctx.strokeRect(M.l,M.t,T.pw,T.ph);
+
+  ctx.font='10px sans-serif'; ctx.fillStyle='#9ca3af';
+
+  // X
+  const xs=niceStep(T.xMax-T.xMin,8), x0=Math.ceil(T.xMin/xs)*xs;
+  ctx.textAlign='center'; ctx.textBaseline='top';
+  for(let x=x0;x<=T.xMax+0.5;x+=xs){
+    const px=T.fx(x);
+    ctx.beginPath();ctx.moveTo(px,M.t+T.ph);ctx.lineTo(px,M.t+T.ph+3);ctx.stroke();
+    ctx.fillText(Math.round(x),px,M.t+T.ph+4);
+  }
+  if(showXLabel){ctx.font='11px sans-serif';ctx.fillStyle='#6b7280';
+    ctx.fillText('Wavenumber (cm⁻¹)',M.l+T.pw/2,T.H-12);}
+
+  // Y
+  const ys=niceStep(T.yMax,5);
+  ctx.textAlign='right'; ctx.textBaseline='middle'; ctx.font='10px sans-serif'; ctx.fillStyle='#9ca3af';
+  for(let y=0;y<=T.yMax+0.5*ys;y+=ys){
+    const py=T.fy(y);
+    if(py<M.t-2||py>M.t+T.ph+2) continue;
+    ctx.beginPath();ctx.moveTo(M.l-3,py);ctx.lineTo(M.l,py);ctx.stroke();
+    ctx.fillText(fmtVal(y),M.l-5,py);
+  }
+  ctx.restore();
+}
+
+function drawCurve(ctx, xs, ys, color, T) {
+  if(!xs.length) return;
+  ctx.save(); ctx.beginPath();
+  ctx.rect(M.l,M.t,T.pw,T.ph); ctx.clip();
+  ctx.strokeStyle=color; ctx.lineWidth=1.5;
+  ctx.beginPath();
+  let moved=false;
+  for(let i=0;i<xs.length;i++){
+    const px=T.fx(xs[i]),py=T.fy(ys[i]);
+    if(!moved){ctx.moveTo(px,py);moved=true;}else ctx.lineTo(px,py);
+  }
+  ctx.stroke(); ctx.restore();
+}
+
+function drawLegend(ctx, dsList, W) {
+  if(dsList.length<2) return;
+  ctx.save(); ctx.font='10px sans-serif'; ctx.textBaseline='middle';
+  let lx=M.l+6, ly=M.t+7;
+  for(const ds of dsList){
+    const name=ds.name.length>20?ds.name.slice(0,18)+'…':ds.name;
+    const tw=ctx.measureText(name).width;
+    ctx.fillStyle='rgba(17,24,39,0.75)'; ctx.fillRect(lx-2,ly-6,tw+18,14);
+    ctx.fillStyle=ds.color; ctx.fillRect(lx,ly-3,11,6);
+    ctx.fillStyle='#d1d5db'; ctx.fillText(name,lx+15,ly);
+    lx+=tw+24;
+    if(lx>W-M.r-80){lx=M.l+6;ly+=15;}
+  }
+  ctx.restore();
+}
+
+function drawCrosshair(ctx, T, f) {
+  const px=T.fx(f); if(px<M.l||px>M.l+T.pw) return;
+  ctx.save(); ctx.strokeStyle='rgba(255,255,255,0.25)'; ctx.lineWidth=0.8;
+  ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(px,M.t); ctx.lineTo(px,M.t+T.ph); ctx.stroke();
+  ctx.restore();
+}
+
+// ════════════════════════════════════════════
+// 8. RENDER MODES
+// ════════════════════════════════════════════
+function renderSingle(canvas, dsList, opts={}) {
+  setupCanvas(canvas);
+  const ctx=canvas.getContext('2d'), W=canvas.clientWidth, H=canvas.clientHeight;
+  drawBg(ctx,W,H);
+  const vis=dsList.filter(d=>d.visible);
+  if(!vis.length){
+    ctx.fillStyle='#374151';ctx.font='13px sans-serif';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText('No data',W/2,H/2); return;
+  }
+  let yMax=0;
+  const pds=vis.map(d=>{const pd=getPlotData(d);for(let i=0;i<pd.ys.length;i++)if(pd.ys[i]>yMax)yMax=pd.ys[i];return{ds:d,pd};});
+  if(yMax===0)yMax=1; yMax*=1.08;
+  const T=makeT(W,H,xRange[0],xRange[1],yMax);
+  drawGridLines(ctx,T); drawAxes(ctx,T,opts.xLabel!==false);
+  for(const{ds,pd}of pds) drawCurve(ctx,pd.xs,pd.ys,ds.color,T);
+  if(opts.legend) drawLegend(ctx,vis,W);
+  if(_hoverF!==null) drawCrosshair(ctx,T,_hoverF);
+}
+
+function renderOverlay(){
+  const c=document.getElementById('ov-canvas'); if(c) renderSingle(c,datasets,{xLabel:true,legend:true});
+}
+
+function renderStack(){
+  const rows=document.querySelectorAll('.stk-row canvas');
+  const vis=datasets.filter(d=>d.visible);
+  rows.forEach((c,i)=>{
+    if(i<vis.length) renderSingle(c,[vis[i]],{xLabel:i===vis.length-1,legend:false});
+  });
+}
+
+function render2col(){
+  for(let i=0;i<2;i++){
+    const c=document.getElementById(`col-cv-${i}`); if(!c) continue;
+    const id=col2Ids[i]; const list=id?datasets.filter(d=>d.id===id):[];
+    renderSingle(c,list,{xLabel:true,legend:false});
+  }
+}
+
+function renderAll(){
+  if(layoutMode==='overlay') renderOverlay();
+  else if(layoutMode==='stack') renderStack();
+  else render2col();
+}
+
+function schedRender(){
+  if(_raf) return;
+  _raf=requestAnimationFrame(()=>{_raf=null;renderAll();});
+}
+
+// ════════════════════════════════════════════
+// 9. BUILD PLOT AREA DOM
+// ════════════════════════════════════════════
+function buildPlotArea(){
+  const area=document.getElementById('plot-area');
+  area.innerHTML='';
+
+  if(layoutMode==='overlay'){
+    const c=mk('canvas'); c.id='ov-canvas'; c.style.cssText='width:100%;height:100%;display:block';
+    area.appendChild(c);
+
+  } else if(layoutMode==='stack'){
+    const cont=mk('div'); cont.className='stk-cont';
+    const vis=datasets.filter(d=>d.visible); const n=Math.max(1,vis.length);
+    for(let i=0;i<n;i++){
+      const row=mk('div'); row.className='stk-row';
+      const lbl=mk('div'); lbl.className='stk-lbl'; lbl.textContent=vis[i]?.name??'';
+      const c=mk('canvas'); c.style.cssText='width:100%;height:100%;display:block';
+      row.appendChild(lbl); row.appendChild(c); cont.appendChild(row);
+    }
+    area.appendChild(cont);
+
+  } else { // 2col
+    const cont=mk('div'); cont.className='col2-cont';
+    for(let i=0;i<2;i++){
+      const pane=mk('div'); pane.className='col2-pane';
+      const sel=mk('select'); sel.className='col2-sel'; sel.id=`col-sel-${i}`;
+      addOpt(sel,'','— select —');
+      for(const d of datasets) addOpt(sel,d.id,d.name);
+      if(col2Ids[i]) sel.value=col2Ids[i];
+      sel.onchange=()=>{ col2Ids[i]=parseInt(sel.value)||null; schedRender(); };
+      const c=mk('canvas'); c.id=`col-cv-${i}`; c.style.cssText='width:100%;flex:1;display:block';
+      pane.appendChild(sel); pane.appendChild(c); cont.appendChild(pane);
+    }
+    area.appendChild(cont);
+  }
+
+  attachInteraction(area);
+  schedRender();
+}
+
+function mk(tag){ return document.createElement(tag); }
+function addOpt(sel,val,txt){ const o=mk('option');o.value=val;o.textContent=txt;sel.appendChild(o); }
+
+// ════════════════════════════════════════════
+// 10. INTERACTION  (zoom / pan)
+// ════════════════════════════════════════════
+function attachInteraction(area){
+  area.addEventListener('wheel', e=>{
+    e.preventDefault();
+    const c=area.querySelector('canvas'); if(!c) return;
+    const cr=c.getBoundingClientRect();
+    const frac=Math.max(0,Math.min(1,(e.clientX-cr.left-M.l)/(cr.width-M.l-M.r)));
+    const fAtC=xRange[0]+frac*(xRange[1]-xRange[0]);
+    const factor=e.deltaY>0?1.12:1/1.12;
+    const span=(xRange[1]-xRange[0])*factor;
+    xRange=[fAtC-frac*span, fAtC+(1-frac)*span];
+    clampRange(); syncRngInputs(); schedRender();
+  },{passive:false});
+
+  area.addEventListener('mousedown', e=>{
+    if(e.button!==0) return;
+    _drag=true; _dragX0=e.clientX; _dragRange0=[...xRange];
+  });
+  window.addEventListener('mousemove', e=>{
+    if(!_drag) return;
+    const c=area.querySelector('canvas'); if(!c) return;
+    const span=_dragRange0[1]-_dragRange0[0];
+    const dx=(e.clientX-_dragX0)/(c.clientWidth-M.l-M.r)*span;
+    xRange=[_dragRange0[0]-dx,_dragRange0[1]-dx];
+    clampRange(); syncRngInputs(); schedRender();
+  });
+  window.addEventListener('mouseup',()=>{ _drag=false; });
+
+  area.addEventListener('dblclick',()=>{ resetRange(); });
+  area.addEventListener('mousemove', onHover);
+  area.addEventListener('mouseleave',()=>{ _hoverF=null; hideTooltip(); schedRender(); });
+  area.addEventListener('click', onClick);
+}
+
+function clampRange(){
+  const sp=xRange[1]-xRange[0];
+  if(sp<5) xRange[1]=xRange[0]+5;
+  if(sp>50000) xRange=[0,50000];
+}
+
+function syncRngInputs(){
+  document.getElementById('xmin-in').value=Math.round(xRange[0]);
+  document.getElementById('xmax-in').value=Math.round(xRange[1]);
+}
+
+function resetRange(){
+  if(!datasets.length) return;
+  let mn=Infinity,mx=-Infinity;
+  for(const d of datasets) for(const p of d.rawData){mn=Math.min(mn,p.f);mx=Math.max(mx,p.f);}
+  if(!isFinite(mn)) return;
+  const pad=(mx-mn)*0.02;
+  xRange=[Math.floor(mn-pad),Math.ceil(mx+pad)];
+  syncRngInputs(); schedRender();
+}
+
+// ════════════════════════════════════════════
+// 11. HOVER & TOOLTIP
+// ════════════════════════════════════════════
+function canvasF(area, clientX){
+  const c=area.querySelector('canvas'); if(!c) return null;
+  const cr=c.getBoundingClientRect();
+  const px=clientX-cr.left;
+  if(px<M.l||px>cr.width-M.r) return null;
+  return xRange[0]+(px-M.l)/(cr.width-M.l-M.r)*(xRange[1]-xRange[0]);
+}
+
+// Snap cursor frequency to the nearest local maximum of the broadened curve.
+// Search window = ±1.5×FWHM or 1% of xRange (whichever is larger).
+// Falls back to raw f when no peaks dataset is visible.
+function snapToLocalMax(f){
+  const fwhm=globalFwhm;
+  const win=Math.max(fwhm*1.5,(xRange[1]-xRange[0])*0.01);
+  const k0=Math.max(0,Math.round(f-win-BRO_MIN));
+  const k1=Math.min(BRO_MAX-BRO_MIN,Math.round(f+win-BRO_MIN));
+  let bestK=-1, bestY=-Infinity;
+  for(const ds of datasets){
+    if(!ds.visible||ds.type!=='peaks') continue;
+    const bro=computeBroadened(ds);
+    for(let k=k0;k<=k1;k++) if(bro[k]>bestY){bestY=bro[k];bestK=k;}
+  }
+  return bestK>=0 ? BRO_MIN+bestK : f;
+}
+
+// Within tolerance window, return the highest-intensity peak (not nearest by freq).
+// This way, zooming out picks dominant peaks; zooming in isolates small ones.
+function nearestPeak(f){
+  const tol=Math.max(5,(xRange[1]-xRange[0])*0.006);
+  let best=null, bestI=-1;
+  for(const ds of datasets){
+    if(!ds.visible||ds.type!=='peaks') continue;
+    for(const p of ds.rawData){
+      if(p.i<=intensThreshold) continue;
+      const cf=p.f*ds.freqScale+ds.freqOffset;
+      if(Math.abs(cf-f)>tol) continue;
+      const si=p.i*ds.scale;
+      if(si>bestI){bestI=si;best={p,ds};}
+    }
+  }
+  return best;
+}
+
+function onHover(e){
+  const area=document.getElementById('plot-area');
+  const f=canvasF(area,e.clientX);
+  if(f===null){_hoverF=null;hideTooltip();schedRender();return;}
+  _hoverF=snapToLocalMax(f);
+  const hit=nearestPeak(_hoverF);
+  if(hit){
+    const{p,ds}=hit;
+    const cf=(p.f*ds.freqScale+ds.freqOffset).toFixed(2);
+    let html=`<div><b style="color:${ds.color}">${cf} cm⁻¹</b>  ${fmtVal(p.i*ds.scale)}</div>`;
+    const projs=p.projections||( p.label?[{label:p.label,pct:p.proj}]:[] );
+    for(const pr of projs.slice(0,3))
+      html+=`<div class="tt-proj">${pr.label}&nbsp;&nbsp;${pr.pct.toFixed(1)}%</div>`;
+    posTooltip(e.clientX+14,e.clientY-10,html);
+  } else hideTooltip();
+  schedRender();
+}
+
+function posTooltip(x,y,html){
+  const tt=document.getElementById('tooltip');
+  tt.innerHTML=html; tt.style.display='block';
+  const tw=tt.offsetWidth,th=tt.offsetHeight;
+  if(x+tw>window.innerWidth-6) x-=tw+22;
+  if(y+th>window.innerHeight-6) y-=th;
+  tt.style.left=x+'px'; tt.style.top=y+'px';
+}
+function hideTooltip(){ document.getElementById('tooltip').style.display='none'; }
+
+function onClick(e){
+  if(_drag) return; // drag end — ignore
+  const area=document.getElementById('plot-area');
+  const f=canvasF(area,e.clientX); if(f===null) return;
+  const snapped=snapToLocalMax(f);
+  const hit=nearestPeak(snapped);
+  if(hit) showInfo(hit.p,hit.ds); else clearInfo();
+}
+
+// ════════════════════════════════════════════
+// 12. INFO PANEL
+// ════════════════════════════════════════════
+function showInfo(p,ds){
+  const panel=document.getElementById('info-panel'); panel.className='has-data';
+  const cf=(p.f*ds.freqScale+ds.freqOffset).toFixed(2);
+  let h=`<span style="color:${ds.color};font-weight:600">${cf} cm⁻¹</span>`;
+  h+=`&nbsp;&nbsp;<span style="color:#9ca3af">${fmtVal(p.i*ds.scale)} km/mol</span>`;
+  const projs=p.projections||(p.label?[{label:p.label,pct:p.proj}]:[]);
+  if(projs.length){
+    h+='<table class="inf-table">';
+    for(const pr of projs)
+      h+=`<tr><td class="lbl">${pr.label}</td><td class="pct">${pr.pct.toFixed(2)}%</td></tr>`;
+    h+='</table>';
+  }
+  panel.innerHTML=h;
+}
+function clearInfo(){
+  const p=document.getElementById('info-panel');
+  p.className=''; p.textContent='Click a peak to see its assignment / projection';
+}
+
+// ════════════════════════════════════════════
+// 13. DATASET MANAGEMENT
+// ════════════════════════════════════════════
+function addDataset(name, parsed){
+  const ds={
+    id:nextId++, name, type:parsed.type, rawData:parsed.data,
+    color:PALETTE[(datasets.length)%PALETTE.length],
+    visible:true, normalized:false, scale:1.0,
+    fwhm:null, lineshape:null,
+    freqScale:1.0, freqOffset:0, baselineMode:'none',
+    _open:false
+  };
+  datasets.push(ds);
+  if(datasets.length===1){
+    let mn=Infinity,mx=-Infinity;
+    for(const p of ds.rawData){mn=Math.min(mn,p.f);mx=Math.max(mx,p.f);}
+    if(isFinite(mn)){
+      const pad=(mx-mn)*0.02;
+      xRange=[Math.floor(mn-pad),Math.ceil(mx+pad)];
+      syncRngInputs();
+    }
+  }
+  return ds;
+}
+
+function removeDataset(id){
+  datasets=datasets.filter(d=>d.id!==id);
+  refreshSidebar();
+  if(layoutMode==='stack') buildPlotArea(); else schedRender();
+}
+
+// ════════════════════════════════════════════
+// 14. SIDEBAR
+// ════════════════════════════════════════════
+function refreshSidebar(){
+  const list=document.getElementById('dataset-list'); list.innerHTML='';
+  for(const ds of datasets){
+    const row=mk('div'); row.className='ds-row';
+
+    // header
+    const hdr=mk('div'); hdr.className='ds-hdr';
+    const sw=mk('div'); sw.className='ds-swatch'; sw.style.background=ds.color; sw.title='Click to change color';
+    sw.addEventListener('click',e=>{e.stopPropagation();pickColor(ds,sw);});
+
+    const eye=mk('span'); eye.className='ds-eye'+(ds.visible?' on':'');
+    eye.textContent=ds.visible?'●':'○';
+    eye.addEventListener('click',e=>{
+      e.stopPropagation(); ds.visible=!ds.visible;
+      eye.textContent=ds.visible?'●':'○'; eye.className='ds-eye'+(ds.visible?' on':'');
+      if(layoutMode==='stack') buildPlotArea(); else schedRender();
+    });
+
+    const nm=mk('span'); nm.className='ds-name'; nm.textContent=ds.name; nm.title=ds.name;
+    const badge=mk('span'); badge.className='ds-badge'; badge.textContent=ds.type==='peaks'?'pk':'cnt';
+    const rm=mk('span'); rm.className='ds-rm'; rm.textContent='✕';
+    rm.addEventListener('click',e=>{e.stopPropagation();removeDataset(ds.id);});
+
+    hdr.appendChild(sw); hdr.appendChild(eye); hdr.appendChild(nm);
+    hdr.appendChild(badge); hdr.appendChild(rm);
+    hdr.addEventListener('click',()=>{ ds._open=!ds._open; ctrl.classList.toggle('open',ds._open); });
+
+    // per-dataset controls
+    const ctrl=mk('div'); ctrl.className='ds-ctrl'+(ds._open?' open':'');
+    ctrl.innerHTML=dsCtrlHTML(ds);
+    wireDsCtrl(ctrl,ds);
+
+    row.appendChild(hdr); row.appendChild(ctrl); list.appendChild(row);
+  }
+}
+
+function dsCtrlHTML(ds){
+  const pp=[0.1,1,8,100].map(v=>`<button class="pre-btn${ds.scale===v?' on':''}" data-sc="${v}">×${v}</button>`).join('');
+  return `
+  <div class="c-row"><span class="c-lbl">Scale</span>
+    <div class="c-presets">${pp}</div>
+    <input class="c-num" data-p="scale" type="number" value="${ds.scale}" min="0.001" step="0.1">
+  </div>
+  <div class="c-row"><span class="c-lbl">Normalize</span>
+    <button class="c-tog${ds.normalized?' on':''}" data-t="normalized">${ds.normalized?'On':'Off'}</button>
+  </div>
+  <div class="c-row"><span class="c-lbl">FWHM</span>
+    <input class="c-num" data-p="fwhm" type="number" placeholder="global" value="${ds.fwhm??''}" min="1" step="1">
+  </div>
+  <div class="c-row"><span class="c-lbl">f × scale</span>
+    <input class="c-num" data-p="freqScale" type="number" value="${ds.freqScale}" min="0.9" max="1.1" step="0.001">
+  </div>
+  <div class="c-row"><span class="c-lbl">f + offset</span>
+    <input class="c-num" data-p="freqOffset" type="number" value="${ds.freqOffset}" step="1">
+  </div>
+  <div class="c-row"><span class="c-lbl">Baseline</span>
+    <select class="c-sel" data-p="baselineMode">
+      <option${ds.baselineMode==='none'?' selected':''}>none</option>
+      <option${ds.baselineMode==='constant'?' selected':''}>constant</option>
+      <option${ds.baselineMode==='linear'?' selected':''}>linear</option>
+    </select>
+  </div>`;
+}
+
+function wireDsCtrl(ctrl, ds){
+  ctrl.querySelectorAll('.pre-btn').forEach(b=>{
+    b.addEventListener('click',()=>{
+      ds.scale=parseFloat(b.dataset.sc);
+      ctrl.querySelector('[data-p=scale]').value=ds.scale;
+      ctrl.querySelectorAll('.pre-btn').forEach(x=>x.classList.toggle('on',x===b));
+      schedRender();
+    });
+  });
+  ctrl.querySelectorAll('[data-p]').forEach(el=>{
+    el.addEventListener('change',()=>{
+      const prop=el.dataset.p;
+      const val=el.tagName==='SELECT'?el.value:(el.value===''?null:parseFloat(el.value));
+      ds[prop]=val;
+      if(['fwhm','freqScale','freqOffset'].includes(prop)) invalidate(ds);
+      schedRender();
+    });
+  });
+  ctrl.querySelectorAll('[data-t]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const prop=btn.dataset.t; ds[prop]=!ds[prop];
+      btn.textContent=ds[prop]?'On':'Off'; btn.classList.toggle('on',ds[prop]);
+      schedRender();
+    });
+  });
+}
+
+function pickColor(ds, swatch){
+  const inp=mk('input'); inp.type='color'; inp.value=ds.color;
+  inp.addEventListener('input',()=>{ ds.color=inp.value; swatch.style.background=inp.value; schedRender(); });
+  inp.click();
+}
+
+// ════════════════════════════════════════════
+// 15. FILE LOADING
+// ════════════════════════════════════════════
+function loadFiles(files){
+  for(const f of files){
+    const r=new FileReader();
+    r.onload=e=>{
+      const parsed=parseFile(f.name,e.target.result);
+      if(!parsed||!parsed.data.length){ alert(`Could not parse: ${f.name}`); return; }
+      addDataset(f.name,parsed);
+      refreshSidebar();
+      if(layoutMode==='stack') buildPlotArea(); else schedRender();
+    };
+    r.readAsText(f);
+  }
+}
+
+// ════════════════════════════════════════════
+// 16. EXPORT
+// ════════════════════════════════════════════
+function exportPNG(){
+  const area=document.getElementById('plot-area');
+  const src=area.querySelector('canvas'); if(!src) return;
+  const dpr=devicePixelRatio||1;
+  const W=src.clientWidth*2, H=src.clientHeight*2;
+  const off=document.createElement('canvas'); off.width=W; off.height=H;
+  const ctx=off.getContext('2d'); ctx.scale(2,2);
+  const vis=datasets.filter(d=>d.visible);
+  drawBg(ctx,src.clientWidth,src.clientHeight);
+  let yMax=0;
+  const pds=vis.map(d=>{const pd=getPlotData(d);for(let i=0;i<pd.ys.length;i++)if(pd.ys[i]>yMax)yMax=pd.ys[i];return{ds:d,pd};});
+  if(!yMax)yMax=1; yMax*=1.08;
+  const T=makeT(src.clientWidth,src.clientHeight,xRange[0],xRange[1],yMax);
+  drawGridLines(ctx,T); drawAxes(ctx,T,true);
+  for(const{ds,pd}of pds) drawCurve(ctx,pd.xs,pd.ys,ds.color,T);
+  drawLegend(ctx,vis,src.clientWidth);
+  off.toBlob(blob=>{ const a=mk('a');a.href=URL.createObjectURL(blob);a.download='spectrum.png';a.click(); });
+}
+
+// ════════════════════════════════════════════
+// 17. INIT
+// ════════════════════════════════════════════
+function init(){
+  // mode tabs
+  document.querySelectorAll('.mode-tab').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      layoutMode=btn.dataset.mode;
+      document.querySelectorAll('.mode-tab').forEach(b=>b.classList.toggle('active',b===btn));
+      buildPlotArea(); refreshSidebar();
+    });
+  });
+
+  // file input
+  document.getElementById('file-input').addEventListener('change',e=>loadFiles(e.target.files));
+
+  // drag-drop on whole page
+  document.body.addEventListener('dragover',e=>{e.preventDefault();document.body.classList.add('drag-over');});
+  document.body.addEventListener('dragleave',()=>document.body.classList.remove('drag-over'));
+  document.body.addEventListener('drop',e=>{ e.preventDefault();document.body.classList.remove('drag-over');loadFiles(e.dataTransfer.files); });
+
+  // FWHM
+  document.getElementById('fwhm-sl').addEventListener('input',e=>{
+    globalFwhm=parseInt(e.target.value);
+    document.getElementById('fwhm-val').textContent=globalFwhm;
+    invalidate(); schedRender();
+  });
+
+  // threshold
+  document.getElementById('thresh-sl').addEventListener('input',e=>{
+    intensThreshold=parseFloat(e.target.value);
+    document.getElementById('thresh-val').textContent=intensThreshold;
+    invalidate(); schedRender();
+  });
+
+  // freq range
+  document.getElementById('xmin-in').addEventListener('change',e=>{
+    xRange[0]=parseFloat(e.target.value)||0;
+    if(xRange[0]>=xRange[1]) xRange[1]=xRange[0]+100;
+    schedRender();
+  });
+  document.getElementById('xmax-in').addEventListener('change',e=>{
+    xRange[1]=parseFloat(e.target.value)||4000;
+    if(xRange[1]<=xRange[0]) xRange[0]=xRange[1]-100;
+    schedRender();
+  });
+  document.getElementById('reset-rng').addEventListener('click',resetRange);
+
+  // lineshape
+  document.getElementById('ls-lor').addEventListener('click',()=>{
+    globalLineshape='lorentzian';
+    document.getElementById('ls-lor').classList.add('on');
+    document.getElementById('ls-gau').classList.remove('on');
+    invalidate(); schedRender();
+  });
+  document.getElementById('ls-gau').addEventListener('click',()=>{
+    globalLineshape='gaussian';
+    document.getElementById('ls-gau').classList.add('on');
+    document.getElementById('ls-lor').classList.remove('on');
+    invalidate(); schedRender();
+  });
+
+  // invert Y
+  document.getElementById('invert-y-cb').addEventListener('change',e=>{ invertY=e.target.checked; schedRender(); });
+
+  // export
+  document.getElementById('export-btn').addEventListener('click',exportPNG);
+
+  // resize
+  new ResizeObserver(()=>schedRender()).observe(document.getElementById('plot-area'));
+
+  buildPlotArea();
+}
+
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
