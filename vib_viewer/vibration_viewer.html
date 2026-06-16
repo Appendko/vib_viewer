@@ -1450,7 +1450,7 @@
   }
   function mkBond(v1,v2,ord){
     const o=[];
-    if(ord===0){const N=Math.max(1,Math.round(v1.distanceTo(v2)/0.4));for(let k=0;k<N;k++){const t=N===1?0.5:k/(N-1);const m=new THREE.Mesh(sGeo,hbondMat);m.position.copy(v1.clone().lerp(v2,t));m.scale.setScalar(SR);o.push(m);}}
+    if(ord===0){const N=Math.max(1,Math.round(v1.distanceTo(v2)/0.25));for(let k=0;k<N;k++){const t=N===1?0.5:k/(N-1);const m=new THREE.Mesh(sGeo,hbondMat);m.position.copy(v1.clone().lerp(v2,t));m.scale.setScalar(SR*0.5);o.push(m);}}
     else if(ord===2){
       const dir=v2.clone().sub(v1).normalize(),p=bPerp(dir),off=SR*2.5,r=SR*0.7;
       o.push(mkCyl(v1.clone().addScaledVector(p,-off/2),v2.clone().addScaledVector(p,-off/2),r,bondMat));
@@ -1943,12 +1943,12 @@
     function createBondObjects(v1, v2, order, sr, bondMat, hbondMat, aromMat) {
       const objs = [];
       if (order === 0) {
-        const N = Math.max(1, Math.round(v1.distanceTo(v2) / 0.4));
+        const N = Math.max(1, Math.round(v1.distanceTo(v2) / 0.25));
         for (let k = 0; k < N; k++) {
           const t = N === 1 ? 0.5 : k / (N - 1);
           const m = new THREE.Mesh(_sphereGeo, hbondMat);
           m.position.copy(v1.clone().lerp(v2, t));
-          m.scale.setScalar(sr);
+          m.scale.setScalar(sr * 0.5);
           objs.push(m);
         }
       } else if (order === 2) {
