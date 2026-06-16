@@ -1623,6 +1623,7 @@
       scene.add(labelGroup);
 
       setupInteraction(container);
+      container.addEventListener('click', e => { if (bondPickMode) handleBondPick(e); });
       window.addEventListener('resize', () => {
         camera.aspect = container.clientWidth / container.clientHeight;
         camera.updateProjectionMatrix();
@@ -1654,10 +1655,10 @@
       const hideSelRect = () => { selRect.style.display = 'none'; };
 
       const onStart = e => {
-        if (atomPickMode || bondPickMode) {
+        if (atomPickMode) {
           isRectSelecting = true;
           rectStart = getCanvasXY(e);
-          if (atomPickMode) showSelRect(rectStart, rectStart);
+          showSelRect(rectStart, rectStart);
         } else {
           isUserInteracting = true;
           prev = getXY(e);
@@ -1667,7 +1668,7 @@
         if (isRectSelecting) {
           const end = getCanvasXY(e);
           const moved = Math.hypot(end.x - rectStart.x, end.y - rectStart.y);
-          if (moved < 5) { if (bondPickMode) handleBondPick(e); else pickAtomAt(e); }
+          if (moved < 5) pickAtomAt(e);
           else           handleRectSelect(rectStart, end);
           hideSelRect();
           isRectSelecting = false;
