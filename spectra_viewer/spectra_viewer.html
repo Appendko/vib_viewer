@@ -748,10 +748,14 @@ function onHover(e){
   if(hit){
     const{p,ds}=hit;
     const cf=(p.f*ds.freqScale+ds.freqOffset).toFixed(2);
-    let html=`<div><b style="color:${ds.color}">${cf} cm⁻¹</b>  ${fmtVal(p.i*ds.scale)}</div>`;
-    const projs=p.projections||( p.label?[{label:p.label,pct:p.proj}]:[] );
+    const inten=p.i*ds.scale;
+    let html=`<div><b style="color:${ds.color}">${cf} cm⁻¹</b>`;
+    if(isFinite(inten)) html+=`  ${fmtVal(inten)}`;
+    html+='</div>';
+    const projs=p.projections||(p.label&&isFinite(p.proj)?[{label:p.label,pct:p.proj}]:[]);
     for(const pr of projs.slice(0,3))
-      html+=`<div class="tt-proj">${pr.label}&nbsp;&nbsp;${pr.pct.toFixed(1)}%</div>`;
+      if(pr.label&&isFinite(pr.pct))
+        html+=`<div class="tt-proj">${pr.label}&nbsp;&nbsp;${pr.pct.toFixed(1)}%</div>`;
     posTooltip(e.clientX+14,e.clientY-10,html);
   } else hideTooltip();
   schedRender();
