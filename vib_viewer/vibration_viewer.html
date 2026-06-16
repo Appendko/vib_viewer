@@ -374,6 +374,16 @@
       <div class="adv-label">Bond list (JSON) — [i, j, order]</div>
       <textarea id="bond-list-textarea" spellcheck="false"></textarea>
       <div style="font-size:0.68rem;color:#6b7280;margin-top:2px;line-height:1.4">0=H-bond &nbsp;·&nbsp; 1=single &nbsp;·&nbsp; 1.5=aromatic &nbsp;·&nbsp; 2=double &nbsp;·&nbsp; 3=triple</div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
+        <select id="pick-bond-order" style="background:#1f2937;border:1px solid #374151;color:#d1d5db;border-radius:4px;padding:2px 4px;font-size:0.72rem">
+          <option value="0">0 — H-bond</option>
+          <option value="1" selected>1 — single</option>
+          <option value="1.5">1.5 — aromatic</option>
+          <option value="2">2 — double</option>
+          <option value="3">3 — triple</option>
+        </select>
+        <button class="adv-btn" id="pick-bond-btn" style="flex:1">Pick Bond</button>
+      </div>
       <div class="adv-btns">
         <button class="adv-btn" id="apply-bonds-btn">Apply</button>
         <button class="adv-btn" id="restore-bonds-btn">Restore Default</button>
@@ -1384,6 +1394,7 @@
     let animationTime = 0, lastTimestamp = null;
     let ballScale = 0.4, stickRadius = 0.12, sticksOnly = false;
     let bondTolerance = 1.25, hbondFactor = 1.0, amplitude = 1.0, speedMultiplier = 1.0;
+    let bondPickMode = false, bondPickFirst = null;
     let isEmbedMode = false;
 
     // Mini-renderer code embedded verbatim into exported HTML snippets.
@@ -1656,7 +1667,7 @@
         if (isRectSelecting) {
           const end = getCanvasXY(e);
           const moved = Math.hypot(end.x - rectStart.x, end.y - rectStart.y);
-          if (moved < 5) pickAtomAt(e);
+          if (moved < 5) { if (bondPickMode) handleBondPick(e); else pickAtomAt(e); }
           else           handleRectSelect(rectStart, end);
           hideSelRect();
           isRectSelecting = false;
@@ -1793,6 +1804,49 @@
       );
       const hits = _raycaster.intersectObjects(atomMeshes);
       if (hits.length > 0) toggleAtom(hits[0].object.userData.atomIndex);
+    }
+
+    function cancelBondPick() {
+      if (bondPickFirst !== null) {
+        if (atomMeshes[bondPickFirst]) atomMeshes[bondPickFirst].material.emissive.set(0x000000);
+        bondPickFirst = null;
+      }
+    }
+    function exitBondPickMode() {
+      bondPickMode = false;
+      cancelBondPick();
+      const btn = document.getElementById('pick-bond-btn');
+      if (btn) { btn.textContent = 'Pick Bond'; btn.style.color = ''; }
+      document.getElementById('canvas-container').style.cursor = '';
+    }
+    function handleBondPick(e) {
+      if (!atomMeshes.length) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      const cx = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+      const cy = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+      _raycaster.setFromCamera(
+        new THREE.Vector2(
+          ((cx - rect.left) / rect.width)  *  2 - 1,
+          ((cy - rect.top)  / rect.height) * -2 + 1
+        ), camera
+      );
+      const hits = _raycaster.intersectObjects(atomMeshes);
+      if (!hits.length) { cancelBondPick(); return; }
+      const idx = hits[0].object.userData.atomIndex;
+      if (bondPickFirst === null) {
+        bondPickFirst = idx;
+        atomMeshes[idx].material.emissive.set(0x22d3ee);
+      } else if (idx === bondPickFirst) {
+        cancelBondPick();
+      } else {
+        const order = parseFloat(document.getElementById('pick-bond-order').value);
+        const a = Math.min(bondPickFirst, idx), b = Math.max(bondPickFirst, idx);
+        if (!currentBonds.some(([bi, bj]) => Math.min(bi,bj)===a && Math.max(bi,bj)===b)) {
+          applyBonds([...currentBonds, [a, b, order]]);
+          updateBondTextarea(currentBonds);
+        }
+        cancelBondPick();
+      }
     }
 
     function handleRectSelect(a, b) {
@@ -2005,6 +2059,7 @@
     }
 
     function renderMolecule(atoms, bonds) {
+      if (bondPickMode) exitBondPickMode();
       while (moleculeGroup.children.length > 0) {
         const c = moleculeGroup.children[0]; moleculeGroup.remove(c);
         if (c.isLine && c.geometry) c.geometry.dispose();
@@ -2614,6 +2669,18 @@
       if (currentMoleculeData) {
         const cov = currentBonds.filter(([i, j, o=1]) => o !== 0);
         applyBonds(cov.concat(detectHBonds(currentMoleculeData.atoms, cov, hbondFactor)));
+      }
+    });
+
+    document.getElementById('pick-bond-btn').addEventListener('click', () => {
+      bondPickMode = !bondPickMode;
+      const btn = document.getElementById('pick-bond-btn');
+      if (bondPickMode) {
+        cancelBondPick();
+        btn.textContent = 'Cancel Pick'; btn.style.color = '#22d3ee';
+        document.getElementById('canvas-container').style.cursor = 'crosshair';
+      } else {
+        exitBondPickMode();
       }
     });
 
