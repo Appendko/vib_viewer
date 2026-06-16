@@ -26,6 +26,13 @@ The JS is organized into five logical sections (marked with comment headers):
 
 5. **Interaction & animation** — mouse/touch drag rotates `moleculeGroup` in X/Y; scroll moves `camera.position.z` (clamped 3–200). The animation loop auto-spins when the user is not interacting.
 
+## Git Workflow
+
+- **Always create a branch** before starting any feature or fix. Never commit directly to `main`.
+- Name branches descriptively: `feature/<topic>` or `fix/<topic>`.
+- Push the branch and report its name so the user can test and merge manually.
+- Do not open or merge pull requests without explicit user instruction.
+
 ## Key Design Details
 
 - **Bond cylinder trick**: `CylinderGeometry` defaults to Y-axis; it is pre-rotated `Math.PI/2` on X so its length axis becomes Z, making `lookAt` work without an intermediate quaternion rotation.
