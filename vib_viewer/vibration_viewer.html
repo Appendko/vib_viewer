@@ -366,6 +366,11 @@
         <input type="range" id="tolerance-slider" min="0.8" max="1.8" step="0.05" value="1.25">
         <span class="slider-val" id="tolerance-val">1.25×</span>
       </div>
+      <div class="adv-label">H-bond factor <span style="font-size:0.65rem;color:#4b5563">(× vdW sum)</span></div>
+      <div class="slider-row">
+        <input type="range" id="hbond-factor-slider" min="0.7" max="1.3" step="0.05" value="1.0" style="accent-color:#22d3ee">
+        <span class="slider-val" id="hbond-factor-val">×1.00</span>
+      </div>
       <div class="adv-label">Bond list (JSON) — [i, j, order]</div>
       <textarea id="bond-list-textarea" spellcheck="false"></textarea>
       <div style="font-size:0.68rem;color:#6b7280;margin-top:2px;line-height:1.4">0=H-bond &nbsp;·&nbsp; 1=single &nbsp;·&nbsp; 1.5=aromatic &nbsp;·&nbsp; 2=double &nbsp;·&nbsp; 3=triple</div>
@@ -1378,7 +1383,7 @@
     let displayMode = 'animation', isUserInteracting = false;
     let animationTime = 0, lastTimestamp = null;
     let ballScale = 0.4, stickRadius = 0.12, sticksOnly = false;
-    let bondTolerance = 1.25, amplitude = 1.0, speedMultiplier = 1.0;
+    let bondTolerance = 1.25, hbondFactor = 1.0, amplitude = 1.0, speedMultiplier = 1.0;
     let isEmbedMode = false;
 
     // Mini-renderer code embedded verbatim into exported HTML snippets.
@@ -1869,8 +1874,9 @@
 
     // Detect non-covalent H···N/O/F hydrogen bonds.
     // Criteria: H···A distance 1.5–2.5 Å AND D-H-A angle > 90°.
-    const _HBOND_ACCEPTORS = new Set(['N', 'O', 'F']);
-    function detectHBonds(atoms, covalentBonds) {
+    const _HBOND_ACCEPTORS = new Set(['N', 'O', 'F', 'S', 'Se', 'Cl', 'Br', 'I']);
+    const _VDW_H = VDW_RADII['H'];
+    function detectHBonds(atoms, covalentBonds, factor = 1.0) {
       const hbonds = [];
       atoms.forEach((ai, i) => {
         if (ai.element !== 'H') return;
@@ -1882,7 +1888,8 @@
           if (!_HBOND_ACCEPTORS.has(aj.element)) return;
           if (covalentBonds.some(([a, b]) => (a===i&&b===j)||(a===j&&b===i))) return;
           const d = Math.hypot(ai.x-aj.x, ai.y-aj.y, ai.z-aj.z);
-          if (d < 1.5 || d > 2.5) return;
+          const maxDist = (_VDW_H + (VDW_RADII[aj.element] ?? 1.8)) * factor;
+          if (d < 1.5 || d > maxDist) return;
           // D-H-A angle must be > 90° (vectors H→D and H→A must have cos < 0).
           const hdx=ad.x-ai.x, hdy=ad.y-ai.y, hdz=ad.z-ai.z;
           const hax=aj.x-ai.x, hay=aj.y-ai.y, haz=aj.z-ai.z;
@@ -2264,7 +2271,7 @@
         element: el, x: molData.coords[i][0], y: molData.coords[i][1], z: molData.coords[i][2]
       }));
       const _rawEq = detectBonds(atoms, bondTolerance);
-      defaultBonds = inferBondOrders(atoms, _rawEq).concat(detectHBonds(atoms, _rawEq));
+      defaultBonds = inferBondOrders(atoms, _rawEq).concat(detectHBonds(atoms, _rawEq, hbondFactor));
       currentBonds = defaultBonds.slice();
       updateBondTextarea(currentBonds);
       currentMoleculeData = { atoms, modes: [] };
@@ -2360,9 +2367,9 @@
 
       const _rawBonds = detectBonds(data.atoms, bondTolerance);
       if (data.bonds) {
-        defaultBonds = data.bonds.concat(detectHBonds(data.atoms, data.bonds));
+        defaultBonds = data.bonds.concat(detectHBonds(data.atoms, data.bonds, hbondFactor));
       } else {
-        defaultBonds = inferBondOrders(data.atoms, _rawBonds).concat(detectHBonds(data.atoms, _rawBonds));
+        defaultBonds = inferBondOrders(data.atoms, _rawBonds).concat(detectHBonds(data.atoms, _rawBonds, hbondFactor));
       }
       currentBonds = defaultBonds.slice();
       updateBondTextarea(currentBonds);
@@ -2582,9 +2589,18 @@
       document.getElementById('tolerance-val').textContent = bondTolerance.toFixed(2) + '×';
       if (currentMoleculeData) {
         const raw = detectBonds(currentMoleculeData.atoms, bondTolerance);
-        defaultBonds = inferBondOrders(currentMoleculeData.atoms, raw).concat(detectHBonds(currentMoleculeData.atoms, raw));
+        defaultBonds = inferBondOrders(currentMoleculeData.atoms, raw).concat(detectHBonds(currentMoleculeData.atoms, raw, hbondFactor));
         updateBondTextarea(defaultBonds);
         applyBonds(defaultBonds);
+      }
+    });
+
+    document.getElementById('hbond-factor-slider').addEventListener('input', e => {
+      hbondFactor = parseFloat(e.target.value);
+      document.getElementById('hbond-factor-val').textContent = '×' + hbondFactor.toFixed(2);
+      if (currentMoleculeData) {
+        const cov = currentBonds.filter(([i, j, o=1]) => o !== 0);
+        applyBonds(cov.concat(detectHBonds(currentMoleculeData.atoms, cov, hbondFactor)));
       }
     });
 
