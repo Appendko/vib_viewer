@@ -195,6 +195,7 @@ let col2Ids = [null, null];
 let _raf = null;
 let _drag = false, _dragX0 = 0, _dragRange0 = null;
 let _hoverF = null;
+let _hoverCanvas = null; // which canvas the cursor is currently over
 
 // ════════════════════════════════════════════
 // 3. PARSERS
@@ -532,7 +533,7 @@ function renderSingle(canvas, dsList, opts={}) {
   drawGridLines(ctx,T); drawAxes(ctx,T,opts.xLabel!==false);
   for(const{ds,pd}of pds) drawCurve(ctx,pd.xs,pd.ys,ds.color,T);
   if(opts.legend) drawLegend(ctx,vis,W);
-  if(_hoverF!==null) drawCrosshair(ctx,T,_hoverF);
+  if(_hoverF!==null&&canvas===_hoverCanvas) drawCrosshair(ctx,T,_hoverF);
 }
 
 function renderOverlay(){
@@ -642,7 +643,7 @@ function attachInteraction(area){
 
   area.addEventListener('dblclick',()=>{ resetRange(); });
   area.addEventListener('mousemove', onHover);
-  area.addEventListener('mouseleave',()=>{ _hoverF=null; hideTooltip(); schedRender(); });
+  area.addEventListener('mouseleave',()=>{ _hoverF=null; _hoverCanvas=null; hideTooltip(); schedRender(); });
   area.addEventListener('click', onClick);
 }
 
@@ -670,24 +671,48 @@ function resetRange(){
 // ════════════════════════════════════════════
 // 11. HOVER & TOOLTIP
 // ════════════════════════════════════════════
-function canvasF(area, clientX){
-  const c=area.querySelector('canvas'); if(!c) return null;
-  const cr=c.getBoundingClientRect();
+// Return the canvas the mouse event landed on (target must be a canvas).
+// Falls back to first canvas in area for events bubbled from non-canvas children.
+function getHoveredCanvas(e){
+  const area=document.getElementById('plot-area');
+  if(e.target&&e.target.tagName==='CANVAS') return e.target;
+  return area.querySelector('canvas');
+}
+
+// Restrict the dataset search to whichever panel owns this canvas.
+function datasetsForCanvas(canvas){
+  if(!canvas) return datasets;
+  if(layoutMode==='overlay') return datasets;
+  if(layoutMode==='stack'){
+    const rows=[...document.querySelectorAll('.stk-row canvas')];
+    const idx=rows.indexOf(canvas);
+    const vis=datasets.filter(d=>d.visible);
+    return (idx>=0&&idx<vis.length)?[vis[idx]]:[];
+  }
+  if(layoutMode==='2col'){
+    if(canvas.id==='col-cv-0') return col2Ids[0]?datasets.filter(d=>d.id===col2Ids[0]):[];
+    if(canvas.id==='col-cv-1') return col2Ids[1]?datasets.filter(d=>d.id===col2Ids[1]):[];
+  }
+  return datasets;
+}
+
+function canvasF(canvas, clientX){
+  if(!canvas) return null;
+  const cr=canvas.getBoundingClientRect();
   const px=clientX-cr.left;
   if(px<M.l||px>cr.width-M.r) return null;
   return xRange[0]+(px-M.l)/(cr.width-M.l-M.r)*(xRange[1]-xRange[0]);
 }
 
 // Snap cursor frequency to the nearest local maximum of the broadened curve.
-// Search window = ±1.5×FWHM or 1% of xRange (whichever is larger).
-// Falls back to raw f when no peaks dataset is visible.
-function snapToLocalMax(f){
+// Only searches dsList (the datasets belonging to the hovered panel).
+function snapToLocalMax(f, dsList){
   const fwhm=globalFwhm;
   const win=Math.max(fwhm*1.5,(xRange[1]-xRange[0])*0.01);
   const k0=Math.max(0,Math.round(f-win-BRO_MIN));
   const k1=Math.min(BRO_MAX-BRO_MIN,Math.round(f+win-BRO_MIN));
   let bestK=-1, bestY=-Infinity;
-  for(const ds of datasets){
+  for(const ds of dsList){
     if(!ds.visible||ds.type!=='peaks') continue;
     const bro=computeBroadened(ds);
     for(let k=k0;k<=k1;k++) if(bro[k]>bestY){bestY=bro[k];bestK=k;}
@@ -695,12 +720,11 @@ function snapToLocalMax(f){
   return bestK>=0 ? BRO_MIN+bestK : f;
 }
 
-// Within tolerance window, return the highest-intensity peak (not nearest by freq).
-// This way, zooming out picks dominant peaks; zooming in isolates small ones.
-function nearestPeak(f){
+// Within tolerance window, return the highest-intensity peak from dsList only.
+function nearestPeak(f, dsList){
   const tol=Math.max(5,(xRange[1]-xRange[0])*0.006);
   let best=null, bestI=-1;
-  for(const ds of datasets){
+  for(const ds of dsList){
     if(!ds.visible||ds.type!=='peaks') continue;
     for(const p of ds.rawData){
       if(p.i<=intensThreshold) continue;
@@ -714,11 +738,13 @@ function nearestPeak(f){
 }
 
 function onHover(e){
-  const area=document.getElementById('plot-area');
-  const f=canvasF(area,e.clientX);
-  if(f===null){_hoverF=null;hideTooltip();schedRender();return;}
-  _hoverF=snapToLocalMax(f);
-  const hit=nearestPeak(_hoverF);
+  const cv=getHoveredCanvas(e);
+  const f=canvasF(cv,e.clientX);
+  if(f===null){_hoverF=null;_hoverCanvas=null;hideTooltip();schedRender();return;}
+  _hoverCanvas=cv;
+  const dsList=datasetsForCanvas(cv);
+  _hoverF=snapToLocalMax(f,dsList);
+  const hit=nearestPeak(_hoverF,dsList);
   if(hit){
     const{p,ds}=hit;
     const cf=(p.f*ds.freqScale+ds.freqOffset).toFixed(2);
@@ -743,10 +769,11 @@ function hideTooltip(){ document.getElementById('tooltip').style.display='none';
 
 function onClick(e){
   if(_drag) return; // drag end — ignore
-  const area=document.getElementById('plot-area');
-  const f=canvasF(area,e.clientX); if(f===null) return;
-  const snapped=snapToLocalMax(f);
-  const hit=nearestPeak(snapped);
+  const cv=getHoveredCanvas(e);
+  const f=canvasF(cv,e.clientX); if(f===null) return;
+  const dsList=datasetsForCanvas(cv);
+  const snapped=snapToLocalMax(f,dsList);
+  const hit=nearestPeak(snapped,dsList);
   if(hit) showInfo(hit.p,hit.ds); else clearInfo();
 }
 
