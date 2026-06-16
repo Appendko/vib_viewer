@@ -1411,8 +1411,8 @@
   const cGeo=new THREE.CylinderGeometry(1,1,1,12);
   cGeo.applyMatrix4(new THREE.Matrix4().makeRotationX(Math.PI/2));
   const bondMat=new THREE.MeshStandardMaterial({color:0x9ca3af,roughness:0.4,metalness:0.6});
-  const hbondMat=new THREE.LineDashedMaterial({color:0x22d3ee,dashSize:0.25,gapSize:0.15});
   const aromMat=new THREE.LineDashedMaterial({color:0x9ca3af,dashSize:0.2,gapSize:0.15});
+  const hbondMat=new THREE.MeshStandardMaterial({color:0x22d3ee,roughness:0.5,metalness:0.1});
   const basePos=D.atoms.map(a=>new THREE.Vector3(a.x,a.y,a.z));
   const atomMeshes=D.atoms.map((a,i)=>{
     const m=new THREE.Mesh(sGeo,getMat(a.element));
@@ -1450,7 +1450,7 @@
   }
   function mkBond(v1,v2,ord){
     const o=[];
-    if(ord===0){o.push(mkLine(v1,v2,hbondMat));}
+    if(ord===0){const N=Math.max(1,Math.round(v1.distanceTo(v2)/0.15));for(let k=0;k<N;k++){const t=N===1?0.5:k/(N-1);const m=new THREE.Mesh(sGeo,hbondMat);m.position.copy(v1.clone().lerp(v2,t));m.scale.setScalar(SR*0.4);o.push(m);}}
     else if(ord===2){
       const dir=v2.clone().sub(v1).normalize(),p=bPerp(dir),off=SR*2.5,r=SR*0.7;
       o.push(mkCyl(v1.clone().addScaledVector(p,-off/2),v2.clone().addScaledVector(p,-off/2),r,bondMat));
@@ -1468,7 +1468,7 @@
     return o;
   }
   function upBond(objs,v1,v2,ord){
-    if(ord===0){upLine(objs[0],v1,v2);}
+    if(ord===0){const N=objs.length;for(let k=0;k<N;k++){const t=N===1?0.5:k/(N-1);objs[k].position.copy(v1.clone().lerp(v2,t));}}
     else if(ord===2){
       const dir=v2.clone().sub(v1).normalize(),p=bPerp(dir),off=SR*2.5,r=SR*0.7;
       upCyl(objs[0],v1.clone().addScaledVector(p,-off/2),v2.clone().addScaledVector(p,-off/2),r);
@@ -1875,6 +1875,7 @@
     // Detect non-covalent H···N/O/F hydrogen bonds.
     // Criteria: H···A distance 1.5–2.5 Å AND D-H-A angle > 90°.
     const _HBOND_ACCEPTORS = new Set(['N', 'O', 'F', 'S', 'Se', 'Cl', 'Br', 'I']);
+    const _HBOND_DONORS    = new Set(['N', 'O', 'F', 'S', 'Se', 'Cl', 'Br', 'I', 'P']);
     const _VDW_H = VDW_RADII['H'];
     function detectHBonds(atoms, covalentBonds, factor = 1.0) {
       const hbonds = [];
@@ -1884,6 +1885,7 @@
         const db = covalentBonds.find(([a, b]) => a===i || b===i);
         if (!db) return;
         const ad = atoms[db[0]===i ? db[1] : db[0]];
+        if (!_HBOND_DONORS.has(ad.element)) return;
         atoms.forEach((aj, j) => {
           if (!_HBOND_ACCEPTORS.has(aj.element)) return;
           if (covalentBonds.some(([a, b]) => (a===i&&b===j)||(a===j&&b===i))) return;
@@ -1943,7 +1945,14 @@
     function createBondObjects(v1, v2, order, sr, bondMat, hbondMat, aromMat) {
       const objs = [];
       if (order === 0) {
-        objs.push(_makeLine(v1, v2, hbondMat));
+        const N = Math.max(1, Math.round(v1.distanceTo(v2) / 0.15));
+        for (let k = 0; k < N; k++) {
+          const t = N === 1 ? 0.5 : k / (N - 1);
+          const m = new THREE.Mesh(_sphereGeo, hbondMat);
+          m.position.copy(v1.clone().lerp(v2, t));
+          m.scale.setScalar(sr * 0.4);
+          objs.push(m);
+        }
       } else if (order === 2) {
         const dir = v2.clone().sub(v1).normalize(), perp = bondPerp(dir);
         const off = sr * 2.5, r = sr * 0.7;
@@ -1969,7 +1978,11 @@
     // Update existing bond objects in-place (called per animation frame).
     function updateBondGroup(objs, v1, v2, order, sr) {
       if (order === 0) {
-        _upLine(objs[0], v1, v2);
+        const N = objs.length;
+        for (let k = 0; k < N; k++) {
+          const t = N === 1 ? 0.5 : k / (N - 1);
+          objs[k].position.copy(v1.clone().lerp(v2, t));
+        }
       } else if (order === 2) {
         const dir = v2.clone().sub(v1).normalize(), perp = bondPerp(dir);
         const off = sr * 2.5, r = sr * 0.7;
@@ -2013,7 +2026,7 @@
       });
 
       const bondMat  = new THREE.MeshStandardMaterial({ color: 0x9ca3af, roughness: 0.4, metalness: 0.6 });
-      const hbondMat = new THREE.LineDashedMaterial({ color: 0x22d3ee, dashSize: 0.25, gapSize: 0.15 });
+      const hbondMat = new THREE.MeshStandardMaterial({ color: 0x22d3ee, roughness: 0.5, metalness: 0.1 });
       const aromMat  = new THREE.LineDashedMaterial({ color: 0x9ca3af, dashSize: 0.2,  gapSize: 0.15 });
       bonds.forEach(([i, j, order=1]) => {
         const v1 = new THREE.Vector3(atoms[i].x, atoms[i].y, atoms[i].z);
