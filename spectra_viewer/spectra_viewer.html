@@ -678,16 +678,36 @@ function canvasF(area, clientX){
   return xRange[0]+(px-M.l)/(cr.width-M.l-M.r)*(xRange[1]-xRange[0]);
 }
 
+// Snap cursor frequency to the nearest local maximum of the broadened curve.
+// Search window = ±1.5×FWHM or 1% of xRange (whichever is larger).
+// Falls back to raw f when no peaks dataset is visible.
+function snapToLocalMax(f){
+  const fwhm=globalFwhm;
+  const win=Math.max(fwhm*1.5,(xRange[1]-xRange[0])*0.01);
+  const k0=Math.max(0,Math.round(f-win-BRO_MIN));
+  const k1=Math.min(BRO_MAX-BRO_MIN,Math.round(f+win-BRO_MIN));
+  let bestK=-1, bestY=-Infinity;
+  for(const ds of datasets){
+    if(!ds.visible||ds.type!=='peaks') continue;
+    const bro=computeBroadened(ds);
+    for(let k=k0;k<=k1;k++) if(bro[k]>bestY){bestY=bro[k];bestK=k;}
+  }
+  return bestK>=0 ? BRO_MIN+bestK : f;
+}
+
+// Within tolerance window, return the highest-intensity peak (not nearest by freq).
+// This way, zooming out picks dominant peaks; zooming in isolates small ones.
 function nearestPeak(f){
   const tol=Math.max(5,(xRange[1]-xRange[0])*0.006);
-  let best=null, bd=tol;
+  let best=null, bestI=-1;
   for(const ds of datasets){
     if(!ds.visible||ds.type!=='peaks') continue;
     for(const p of ds.rawData){
       if(p.i<=intensThreshold) continue;
       const cf=p.f*ds.freqScale+ds.freqOffset;
-      const d=Math.abs(cf-f);
-      if(d<bd){bd=d;best={p,ds};}
+      if(Math.abs(cf-f)>tol) continue;
+      const si=p.i*ds.scale;
+      if(si>bestI){bestI=si;best={p,ds};}
     }
   }
   return best;
@@ -697,8 +717,8 @@ function onHover(e){
   const area=document.getElementById('plot-area');
   const f=canvasF(area,e.clientX);
   if(f===null){_hoverF=null;hideTooltip();schedRender();return;}
-  _hoverF=f;
-  const hit=nearestPeak(f);
+  _hoverF=snapToLocalMax(f);
+  const hit=nearestPeak(_hoverF);
   if(hit){
     const{p,ds}=hit;
     const cf=(p.f*ds.freqScale+ds.freqOffset).toFixed(2);
@@ -725,7 +745,8 @@ function onClick(e){
   if(_drag) return; // drag end — ignore
   const area=document.getElementById('plot-area');
   const f=canvasF(area,e.clientX); if(f===null) return;
-  const hit=nearestPeak(f);
+  const snapped=snapToLocalMax(f);
+  const hit=nearestPeak(snapped);
   if(hit) showInfo(hit.p,hit.ds); else clearInfo();
 }
 
