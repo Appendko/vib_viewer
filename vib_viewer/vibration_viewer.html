@@ -1654,10 +1654,10 @@
       const hideSelRect = () => { selRect.style.display = 'none'; };
 
       const onStart = e => {
-        if (atomPickMode) {
+        if (atomPickMode || bondPickMode) {
           isRectSelecting = true;
           rectStart = getCanvasXY(e);
-          showSelRect(rectStart, rectStart);
+          if (atomPickMode) showSelRect(rectStart, rectStart);
         } else {
           isUserInteracting = true;
           prev = getXY(e);
