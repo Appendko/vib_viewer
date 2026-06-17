@@ -80,12 +80,20 @@ body{margin:0;padding:0;overflow:hidden;background:#111827;
 .grid-cont{width:100%;height:100%;display:grid;gap:2px;background:#0d1117}
 .panel-cell{position:relative;overflow:hidden;background:#111827;min-width:0;min-height:0}
 .panel-cell canvas{width:100%;height:100%;display:block}
-.panel-lbl{position:absolute;top:4px;left:66px;font-size:0.63rem;color:#6b7280;
-  pointer-events:none;z-index:1;white-space:nowrap;overflow:hidden;
-  max-width:calc(100% - 82px);text-overflow:ellipsis}
+.panel-lbl{position:absolute;top:3px;left:76px;font-size:0.82rem;color:#9ca3af;
+  z-index:2;background:transparent;border:1px solid transparent;outline:none;
+  width:calc(55% - 80px);min-width:60px;padding:1px 4px;border-radius:3px;
+  white-space:nowrap;overflow:hidden;}
+.panel-lbl:hover{background:rgba(31,41,55,0.8);border-color:#4b5563;cursor:text}
+.panel-lbl:focus{background:rgba(17,24,39,0.9);border-color:#6b7280;color:#f3f4f6;cursor:text}
+.panel-ymax{position:absolute;top:3px;right:6px;width:72px;font-size:0.76rem;
+  background:rgba(31,41,55,0.6);border:1px solid transparent;border-radius:3px;
+  color:#6b7280;text-align:right;padding:1px 5px;z-index:2;outline:none;}
+.panel-ymax:hover,.panel-ymax:focus{border-color:#4b5563;color:#d1d5db;
+  background:rgba(17,24,39,0.9);}
 /* info panel */
-#info-panel{background:#1f2937;border-top:1px solid #374151;padding:5px 12px;
-  font-size:0.76rem;min-height:26px;max-height:130px;overflow-y:auto;flex-shrink:0;color:#4b5563}
+#info-panel{background:#1f2937;border-top:1px solid #374151;padding:6px 14px;
+  font-size:0.84rem;min-height:28px;max-height:140px;overflow-y:auto;flex-shrink:0;color:#4b5563}
 #info-panel.has-data{color:#d1d5db}
 .inf-table{border-collapse:collapse;width:100%;font-size:0.73rem;margin-top:3px}
 .inf-table td{padding:1px 8px 1px 0;color:#d1d5db}
@@ -94,8 +102,8 @@ body{margin:0;padding:0;overflow:hidden;background:#111827;
 /* tooltip */
 #tooltip{position:fixed;display:none;pointer-events:none;
   background:rgba(17,24,39,0.93);border:1px solid #374151;border-radius:5px;
-  padding:5px 9px;font-size:0.71rem;color:#d1d5db;z-index:200;
-  white-space:nowrap;line-height:1.65}
+  padding:6px 11px;font-size:0.83rem;color:#d1d5db;z-index:200;
+  white-space:nowrap;line-height:1.7}
 .tt-proj{font-family:monospace;color:#22d3ee}
 /* scrollbar */
 ::-webkit-scrollbar{width:5px}
@@ -174,7 +182,7 @@ body.drag-over #plot-area::after{content:'Drop files here';position:absolute;
 // 1. CONSTANTS
 // ════════════════════════════════════════════
 const PALETTE = ['#22d3ee','#f59e0b','#a78bfa','#34d399','#f87171','#60a5fa','#fb923c','#e879f9'];
-const M = {t:12, r:16, b:42, l:62}; // plot margins px
+const M = {t:14, r:18, b:52, l:72}; // plot margins px
 const BRO_MIN = 0, BRO_MAX = 10000; // broadening grid range cm⁻¹
 
 // ════════════════════════════════════════════
@@ -185,6 +193,8 @@ let nextId = 1;
 let xRange = [0, 4000];
 let gridRows = 1;
 let gridCols = 1;
+let panelLabels = []; // user-set label per panel index
+let panelYMax = [];   // user-set y max per panel; null/undefined = auto
 let globalFwhm = 10;
 let globalLineshape = 'lorentzian';
 let invertY = false;
@@ -436,7 +446,7 @@ function drawBg(ctx, W, H) {
 }
 
 function drawGridLines(ctx, T) {
-  ctx.save(); ctx.strokeStyle='rgba(55,65,81,0.55)'; ctx.lineWidth=0.5;
+  ctx.save(); ctx.strokeStyle='rgba(55,65,81,0.6)'; ctx.lineWidth=0.7;
   const xs=niceStep(T.xMax-T.xMin,8), x0=Math.ceil(T.xMin/xs)*xs;
   for(let x=x0;x<=T.xMax+0.5;x+=xs){const px=T.fx(x);ctx.beginPath();ctx.moveTo(px,M.t);ctx.lineTo(px,M.t+T.ph);ctx.stroke();}
   const ys=niceStep(T.yMax,5), inv=invertY;
@@ -449,27 +459,27 @@ function drawAxes(ctx, T, showXLabel) {
   ctx.strokeStyle='#4b5563'; ctx.lineWidth=1;
   ctx.strokeRect(M.l,M.t,T.pw,T.ph);
 
-  ctx.font='10px sans-serif'; ctx.fillStyle='#9ca3af';
+  ctx.font='12px sans-serif'; ctx.fillStyle='#9ca3af';
 
   // X
   const xs=niceStep(T.xMax-T.xMin,8), x0=Math.ceil(T.xMin/xs)*xs;
   ctx.textAlign='center'; ctx.textBaseline='top';
   for(let x=x0;x<=T.xMax+0.5;x+=xs){
     const px=T.fx(x);
-    ctx.beginPath();ctx.moveTo(px,M.t+T.ph);ctx.lineTo(px,M.t+T.ph+3);ctx.stroke();
-    ctx.fillText(Math.round(x),px,M.t+T.ph+4);
+    ctx.beginPath();ctx.moveTo(px,M.t+T.ph);ctx.lineTo(px,M.t+T.ph+4);ctx.stroke();
+    ctx.fillText(Math.round(x),px,M.t+T.ph+5);
   }
-  if(showXLabel){ctx.font='11px sans-serif';ctx.fillStyle='#6b7280';
-    ctx.fillText('Wavenumber (cm⁻¹)',M.l+T.pw/2,T.H-12);}
+  if(showXLabel){ctx.font='13px sans-serif';ctx.fillStyle='#6b7280';
+    ctx.fillText('Wavenumber (cm⁻¹)',M.l+T.pw/2,T.H-14);}
 
   // Y
   const ys=niceStep(T.yMax,5);
-  ctx.textAlign='right'; ctx.textBaseline='middle'; ctx.font='10px sans-serif'; ctx.fillStyle='#9ca3af';
+  ctx.textAlign='right'; ctx.textBaseline='middle'; ctx.font='12px sans-serif'; ctx.fillStyle='#9ca3af';
   for(let y=0;y<=T.yMax+0.5*ys;y+=ys){
     const py=T.fy(y);
     if(py<M.t-2||py>M.t+T.ph+2) continue;
-    ctx.beginPath();ctx.moveTo(M.l-3,py);ctx.lineTo(M.l,py);ctx.stroke();
-    ctx.fillText(fmtVal(y),M.l-5,py);
+    ctx.beginPath();ctx.moveTo(M.l-4,py);ctx.lineTo(M.l,py);ctx.stroke();
+    ctx.fillText(fmtVal(y),M.l-6,py);
   }
   ctx.restore();
 }
@@ -478,7 +488,7 @@ function drawCurve(ctx, xs, ys, color, T) {
   if(!xs.length) return;
   ctx.save(); ctx.beginPath();
   ctx.rect(M.l,M.t,T.pw,T.ph); ctx.clip();
-  ctx.strokeStyle=color; ctx.lineWidth=1.5;
+  ctx.strokeStyle=color; ctx.lineWidth=2.5;
   ctx.beginPath();
   let moved=false;
   for(let i=0;i<xs.length;i++){
@@ -490,16 +500,16 @@ function drawCurve(ctx, xs, ys, color, T) {
 
 function drawLegend(ctx, dsList, W) {
   if(dsList.length<2) return;
-  ctx.save(); ctx.font='10px sans-serif'; ctx.textBaseline='middle';
-  let lx=M.l+6, ly=M.t+7;
+  ctx.save(); ctx.font='12px sans-serif'; ctx.textBaseline='middle';
+  let lx=M.l+8, ly=M.t+9;
   for(const ds of dsList){
-    const name=ds.name.length>20?ds.name.slice(0,18)+'…':ds.name;
+    const name=ds.name.length>22?ds.name.slice(0,20)+'…':ds.name;
     const tw=ctx.measureText(name).width;
-    ctx.fillStyle='rgba(17,24,39,0.75)'; ctx.fillRect(lx-2,ly-6,tw+18,14);
-    ctx.fillStyle=ds.color; ctx.fillRect(lx,ly-3,11,6);
-    ctx.fillStyle='#d1d5db'; ctx.fillText(name,lx+15,ly);
-    lx+=tw+24;
-    if(lx>W-M.r-80){lx=M.l+6;ly+=15;}
+    ctx.fillStyle='rgba(17,24,39,0.8)'; ctx.fillRect(lx-3,ly-7,tw+21,16);
+    ctx.fillStyle=ds.color; ctx.fillRect(lx,ly-4,13,8);
+    ctx.fillStyle='#e5e7eb'; ctx.fillText(name,lx+17,ly);
+    lx+=tw+28;
+    if(lx>W-M.r-90){lx=M.l+8;ly+=18;}
   }
   ctx.restore();
 }
@@ -527,7 +537,8 @@ function renderSingle(canvas, dsList, opts={}) {
   }
   let yMax=0;
   const pds=vis.map(d=>{const pd=getPlotData(d);for(let i=0;i<pd.ys.length;i++)if(pd.ys[i]>yMax)yMax=pd.ys[i];return{ds:d,pd};});
-  if(yMax===0)yMax=1; yMax*=1.08;
+  if(opts.fixedYMax>0) yMax=opts.fixedYMax;
+  else { if(yMax===0)yMax=1; yMax*=1.08; }
   const T=makeT(W,H,xRange[0],xRange[1],yMax);
   drawGridLines(ctx,T); drawAxes(ctx,T,opts.xLabel!==false);
   for(const{ds,pd}of pds) drawCurve(ctx,pd.xs,pd.ys,ds.color,T);
@@ -540,7 +551,7 @@ function renderAll(){
   for(let i=0;i<n;i++){
     const c=document.getElementById(`panel-cv-${i}`); if(!c) continue;
     const dsList=datasets.filter(d=>d.visible&&d.panel===i);
-    renderSingle(c,dsList,{xLabel:true,legend:dsList.length>1});
+    renderSingle(c,dsList,{xLabel:true,legend:dsList.length>1,fixedYMax:panelYMax[i]||null});
   }
 }
 
@@ -567,9 +578,30 @@ function buildPlotArea(){
   cont.style.gridTemplateRows=`repeat(${gridRows},1fr)`;
   for(let i=0;i<n;i++){
     const cell=mk('div'); cell.className='panel-cell';
-    const lbl=mk('div'); lbl.className='panel-lbl'; lbl.textContent=panelLabel(i);
+
+    // editable panel label
+    const lbl=mk('input'); lbl.type='text'; lbl.className='panel-lbl';
+    lbl.value=panelLabels[i]??''; lbl.placeholder=panelLabel(i)||`Panel ${i+1}`;
+    lbl.title='Click to edit panel label';
+    lbl.addEventListener('input',()=>{ panelLabels[i]=lbl.value; });
+    lbl.addEventListener('mousedown',e=>e.stopPropagation());
+    lbl.addEventListener('click',e=>e.stopPropagation());
+
+    // per-panel Y max
+    const ymi=mk('input'); ymi.type='number'; ymi.className='panel-ymax';
+    ymi.value=panelYMax[i]??''; ymi.placeholder='Y auto'; ymi.min='0';
+    ymi.title='Fix Y axis maximum (blank = auto-scale)';
+    ymi.addEventListener('change',()=>{
+      const v=parseFloat(ymi.value);
+      panelYMax[i]=(isFinite(v)&&v>0)?v:null;
+      schedRender();
+    });
+    ymi.addEventListener('mousedown',e=>e.stopPropagation());
+    ymi.addEventListener('click',e=>e.stopPropagation());
+
     const c=mk('canvas'); c.id=`panel-cv-${i}`;
-    cell.appendChild(lbl); cell.appendChild(c); cont.appendChild(cell);
+    cell.appendChild(lbl); cell.appendChild(ymi); cell.appendChild(c);
+    cont.appendChild(cell);
   }
   area.appendChild(cont);
   schedRender();
