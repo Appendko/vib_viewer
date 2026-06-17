@@ -399,7 +399,8 @@ function getPlotData(ds) {
   // scale + normalize
   for (let i=0;i<ys.length;i++) ys[i]*=ds.scale;
   if (ds.normalized) {
-    let mx=0; for(let i=0;i<ys.length;i++) if(ys[i]>mx) mx=ys[i];
+    let mx=0;
+    for(let i=0;i<xs.length;i++) if(xs[i]>=xRange[0]&&xs[i]<=xRange[1]&&ys[i]>mx) mx=ys[i];
     if (mx>0) for(let i=0;i<ys.length;i++) ys[i]/=mx;
   }
   return {xs, ys};
