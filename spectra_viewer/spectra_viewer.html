@@ -183,6 +183,28 @@ body.drag-over #plot-area::after{content:'Drop files here';position:absolute;
         <input type="file" id="file-input" multiple
           accept=".peak,.spec,.out,.jdx,.dx,.csv,.txt,.dat">
       </button>
+      <div class="g-lbl">Next dataset</div>
+      <div class="c-row">
+        <span class="c-lbl">Color</span>
+        <div id="ns-swatch" class="ds-swatch" style="width:16px;height:16px;cursor:pointer" title="Click to set color"></div>
+        <input type="color" id="ns-color-in" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0">
+        <button class="ico-btn" id="ns-auto" style="font-size:0.65rem;padding:1px 5px">Auto</button>
+      </div>
+      <div class="c-row">
+        <span class="c-lbl">Width</span>
+        <div class="c-presets">
+          <button class="pre-btn" id="ns-w1">thin</button>
+          <button class="pre-btn on" id="ns-w2">mid</button>
+          <button class="pre-btn" id="ns-w4">thick</button>
+        </div>
+      </div>
+      <div class="c-row">
+        <span class="c-lbl">Dash</span>
+        <div class="c-presets">
+          <button class="pre-btn on" id="ns-solid">solid</button>
+          <button class="pre-btn" id="ns-dash">dashed</button>
+        </div>
+      </div>
       <div class="g-lbl">Lineshape</div>
       <div class="ls-row">
         <button class="c-tog on" id="ls-lor">Lorentzian</button>
@@ -243,6 +265,9 @@ let _drag = false, _dragX0 = 0, _dragRange0 = null, _dragCanvas = null;
 let _hoverF = null;
 let _hoverCanvas = null;
 let _legendBoxes = [];
+let _nextColor = null;      // null = auto from palette
+let _nextLineWidth = 2.5;
+let _nextLineDash = [];     // [] = solid
 
 // ════════════════════════════════════════════
 // 3. PARSERS
@@ -524,11 +549,12 @@ function drawAxes(ctx, T, showXLabel) {
   ctx.restore();
 }
 
-function drawCurve(ctx, xs, ys, color, T) {
-  if(!xs.length) return;
+function drawCurve(ctx, pd, ds, T) {
+  const {xs,ys}=pd; if(!xs.length) return;
   ctx.save(); ctx.beginPath();
   ctx.rect(M.l,M.t,T.pw,T.ph); ctx.clip();
-  ctx.strokeStyle=color; ctx.lineWidth=2.5;
+  ctx.strokeStyle=ds.color; ctx.lineWidth=ds.lineWidth||2.5;
+  if(ds.lineDash) ctx.setLineDash(ds.lineDash);
   ctx.beginPath();
   let moved=false;
   for(let i=0;i<xs.length;i++){
@@ -593,7 +619,7 @@ function renderSingle(canvas, dsList, opts={}) {
     if(ds.normalized) for(let j=0;j<pd.ys.length;j++) pd.ys[j]*=yMax;
   const T=makeT(W,H,xRange[0],xRange[1],yMax);
   drawGridLines(ctx,T); drawAxes(ctx,T,opts.xLabel!==false);
-  for(const{ds,pd}of pds) drawCurve(ctx,pd.xs,pd.ys,ds.color,T);
+  for(const{ds,pd}of pds) drawCurve(ctx,pd,ds,T);
   if(opts.legend) drawLegend(ctx,vis,canvas,W);
   if(_hoverF!==null&&canvas===_hoverCanvas) drawCrosshair(ctx,T,_hoverF);
 }
@@ -678,6 +704,14 @@ function buildPlotArea(){
 }
 
 function mk(tag){ return document.createElement(tag); }
+
+function updateNextStyleUI(){
+  const sw=document.getElementById('ns-swatch');
+  const ab=document.getElementById('ns-auto');
+  if(!sw) return;
+  sw.style.background=_nextColor??PALETTE[datasets.length%PALETTE.length];
+  ab.classList.toggle('on',_nextColor===null);
+}
 function addOpt(sel,val,txt){ const o=mk('option');o.value=val;o.textContent=txt;sel.appendChild(o); }
 
 // ════════════════════════════════════════════
@@ -900,13 +934,15 @@ function clearInfo(){
 function addDataset(name, parsed, panelIndex=0){
   const ds={
     id:nextId++, name, type:parsed.type, rawData:parsed.data,
-    color:PALETTE[(datasets.length)%PALETTE.length],
+    color:_nextColor??PALETTE[(datasets.length)%PALETTE.length],
     visible:true, normalized:parsed.type==='continuous', scale:1.0,
+    lineWidth:_nextLineWidth, lineDash:[..._nextLineDash],
     fwhm:null, lineshape:null,
     freqScale:1.0, freqOffset:0, baselineMode:'none',
     panel:panelIndex, _open:false
   };
   datasets.push(ds);
+  updateNextStyleUI();
   if(datasets.length===1){
     let mn=Infinity,mx=-Infinity;
     for(const p of ds.rawData){mn=Math.min(mn,p.f);mx=Math.max(mx,p.f);}
@@ -983,6 +1019,9 @@ function panelOpts(cur){
 
 function dsCtrlHTML(ds){
   const pp=[0.1,1,10].map(v=>`<button class="pre-btn${ds.scale===v?' on':''}" data-sc="${v}">×${v}</button>`).join('');
+  const ww=[[1,'thin'],[2.5,'mid'],[4,'thick']].map(([w,l])=>`<button class="pre-btn${ds.lineWidth===w?' on':''}" data-lw="${w}">${l}</button>`).join('');
+  const solid=!ds.lineDash||!ds.lineDash.length;
+  const dd=[['solid',solid],['dashed',!solid]].map(([l,on])=>`<button class="pre-btn${on?' on':''}" data-ld="${l}">${l}</button>`).join('');
   return `
   <div class="c-row"><span class="c-lbl">Panel</span>
     <select class="c-sel" data-p="panel">${panelOpts(ds.panel)}</select>
@@ -993,6 +1032,12 @@ function dsCtrlHTML(ds){
   </div>
   <div class="c-row"><span class="c-lbl">Normalize</span>
     <button class="c-tog${ds.normalized?' on':''}" data-t="normalized">${ds.normalized?'On':'Off'}</button>
+  </div>
+  <div class="c-row"><span class="c-lbl">Width</span>
+    <div class="c-presets">${ww}</div>
+  </div>
+  <div class="c-row"><span class="c-lbl">Dash</span>
+    <div class="c-presets">${dd}</div>
   </div>
   <div class="c-row"><span class="c-lbl">FWHM</span>
     <input class="c-num" data-p="fwhm" type="number" placeholder="global" value="${ds.fwhm??''}" min="1" step="1">
@@ -1038,6 +1083,20 @@ function wireDsCtrl(ctrl, ds){
     btn.addEventListener('click',()=>{
       const prop=btn.dataset.t; ds[prop]=!ds[prop];
       btn.textContent=ds[prop]?'On':'Off'; btn.classList.toggle('on',ds[prop]);
+      schedRender();
+    });
+  });
+  ctrl.querySelectorAll('[data-lw]').forEach(b=>{
+    b.addEventListener('click',()=>{
+      ds.lineWidth=parseFloat(b.dataset.lw);
+      ctrl.querySelectorAll('[data-lw]').forEach(x=>x.classList.toggle('on',x===b));
+      schedRender();
+    });
+  });
+  ctrl.querySelectorAll('[data-ld]').forEach(b=>{
+    b.addEventListener('click',()=>{
+      ds.lineDash=b.dataset.ld==='dashed'?[6,4]:[];
+      ctrl.querySelectorAll('[data-ld]').forEach(x=>x.classList.toggle('on',x===b));
       schedRender();
     });
   });
@@ -1166,6 +1225,30 @@ function init(){
     schedRender();
   });
   document.getElementById('reset-rng').addEventListener('click',resetRange);
+
+  // next dataset style
+  const nsSw=document.getElementById('ns-swatch');
+  const nsIn=document.getElementById('ns-color-in');
+  nsSw.addEventListener('click',()=>nsIn.click());
+  nsIn.addEventListener('input',e=>{ _nextColor=e.target.value; updateNextStyleUI(); });
+  document.getElementById('ns-auto').addEventListener('click',()=>{ _nextColor=null; updateNextStyleUI(); });
+  [[1,'ns-w1'],[2.5,'ns-w2'],[4,'ns-w4']].forEach(([w,id])=>{
+    document.getElementById(id).addEventListener('click',()=>{
+      _nextLineWidth=w;
+      ['ns-w1','ns-w2','ns-w4'].forEach(i=>document.getElementById(i).classList.toggle('on',i===id));
+    });
+  });
+  document.getElementById('ns-solid').addEventListener('click',()=>{
+    _nextLineDash=[];
+    document.getElementById('ns-solid').classList.add('on');
+    document.getElementById('ns-dash').classList.remove('on');
+  });
+  document.getElementById('ns-dash').addEventListener('click',()=>{
+    _nextLineDash=[6,4];
+    document.getElementById('ns-dash').classList.add('on');
+    document.getElementById('ns-solid').classList.remove('on');
+  });
+  updateNextStyleUI();
 
   // lineshape
   document.getElementById('ls-lor').addEventListener('click',()=>{
