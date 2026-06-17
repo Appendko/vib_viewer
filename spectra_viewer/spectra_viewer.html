@@ -14,10 +14,9 @@ body{margin:0;padding:0;overflow:hidden;background:#111827;
   padding:7px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0}
 #top-bar h1{margin:0;font-size:1rem;font-weight:600;color:#f3f4f6;white-space:nowrap}
 .sep{width:1px;height:18px;background:#374151;flex-shrink:0}
-.mode-tabs{display:flex;gap:3px}
-.mode-tab{padding:4px 11px;border:1px solid #374151;border-radius:5px;
-  background:#374151;color:#d1d5db;font-size:0.8rem;cursor:pointer}
-.mode-tab.active{background:#3b82f6;border-color:#3b82f6;color:#fff}
+.grid-ctl{display:flex;align-items:center;gap:5px;font-size:0.8rem;color:#9ca3af}
+.grid-n{width:34px;background:#374151;border:1px solid #4b5563;border-radius:4px;
+  color:#d1d5db;font-size:0.8rem;padding:2px 4px;text-align:center}
 .top-ctl{display:flex;align-items:center;gap:6px;font-size:0.78rem;color:#9ca3af}
 .top-ctl label{cursor:pointer;display:flex;align-items:center;gap:4px}
 .top-ctl input[type=checkbox]{accent-color:#3b82f6}
@@ -77,16 +76,13 @@ body{margin:0;padding:0;overflow:hidden;background:#111827;
 #right{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
 #plot-area{flex:1;position:relative;overflow:hidden;min-height:0;background:#111827}
 #plot-area canvas{display:block}
-/* stack */
-.stk-cont{height:100%;display:flex;flex-direction:column;overflow:hidden}
-.stk-row{flex:1;min-height:0;position:relative}
-.stk-lbl{position:absolute;top:4px;right:20px;font-size:0.63rem;color:#4b5563;
-  pointer-events:none;z-index:1}
-/* 2-col */
-.col2-cont{height:100%;display:flex;gap:1px}
-.col2-pane{flex:1;display:flex;flex-direction:column;min-width:0}
-.col2-sel{flex-shrink:0;margin:4px 8px;background:#1f2937;border:1px solid #374151;
-  color:#d1d5db;border-radius:4px;padding:2px 4px;font-size:0.74rem;cursor:pointer}
+/* grid panels */
+.grid-cont{width:100%;height:100%;display:grid;gap:2px;background:#0d1117}
+.panel-cell{position:relative;overflow:hidden;background:#111827;min-width:0;min-height:0}
+.panel-cell canvas{width:100%;height:100%;display:block}
+.panel-lbl{position:absolute;top:4px;left:66px;font-size:0.63rem;color:#6b7280;
+  pointer-events:none;z-index:1;white-space:nowrap;overflow:hidden;
+  max-width:calc(100% - 82px);text-overflow:ellipsis}
 /* info panel */
 #info-panel{background:#1f2937;border-top:1px solid #374151;padding:5px 12px;
   font-size:0.76rem;min-height:26px;max-height:130px;overflow-y:auto;flex-shrink:0;color:#4b5563}
@@ -117,10 +113,11 @@ body.drag-over #plot-area::after{content:'Drop files here';position:absolute;
 <div id="top-bar">
   <h1>Spectra Viewer</h1>
   <div class="sep"></div>
-  <div class="mode-tabs">
-    <button class="mode-tab active" data-mode="overlay">Overlay</button>
-    <button class="mode-tab" data-mode="stack">Stack</button>
-    <button class="mode-tab" data-mode="2col">2-col</button>
+  <div class="grid-ctl">
+    Grid
+    <input class="grid-n" id="grid-rows" type="number" min="1" max="4" value="1">
+    ×
+    <input class="grid-n" id="grid-cols" type="number" min="1" max="4" value="1">
   </div>
   <div class="sep"></div>
   <div class="top-ctl">
@@ -186,16 +183,16 @@ const BRO_MIN = 0, BRO_MAX = 10000; // broadening grid range cm⁻¹
 let datasets = [];
 let nextId = 1;
 let xRange = [0, 4000];
-let layoutMode = 'overlay';
+let gridRows = 1;
+let gridCols = 1;
 let globalFwhm = 10;
 let globalLineshape = 'lorentzian';
 let invertY = false;
 let intensThreshold = 0;
-let col2Ids = [null, null];
 let _raf = null;
-let _drag = false, _dragX0 = 0, _dragRange0 = null;
+let _drag = false, _dragX0 = 0, _dragRange0 = null, _dragCanvas = null;
 let _hoverF = null;
-let _hoverCanvas = null; // which canvas the cursor is currently over
+let _hoverCanvas = null;
 
 // ════════════════════════════════════════════
 // 3. PARSERS
@@ -536,30 +533,13 @@ function renderSingle(canvas, dsList, opts={}) {
   if(_hoverF!==null&&canvas===_hoverCanvas) drawCrosshair(ctx,T,_hoverF);
 }
 
-function renderOverlay(){
-  const c=document.getElementById('ov-canvas'); if(c) renderSingle(c,datasets,{xLabel:true,legend:true});
-}
-
-function renderStack(){
-  const rows=document.querySelectorAll('.stk-row canvas');
-  const vis=datasets.filter(d=>d.visible);
-  rows.forEach((c,i)=>{
-    if(i<vis.length) renderSingle(c,[vis[i]],{xLabel:i===vis.length-1,legend:false});
-  });
-}
-
-function render2col(){
-  for(let i=0;i<2;i++){
-    const c=document.getElementById(`col-cv-${i}`); if(!c) continue;
-    const id=col2Ids[i]; const list=id?datasets.filter(d=>d.id===id):[];
-    renderSingle(c,list,{xLabel:true,legend:false});
-  }
-}
-
 function renderAll(){
-  if(layoutMode==='overlay') renderOverlay();
-  else if(layoutMode==='stack') renderStack();
-  else render2col();
+  const n=gridRows*gridCols;
+  for(let i=0;i<n;i++){
+    const c=document.getElementById(`panel-cv-${i}`); if(!c) continue;
+    const dsList=datasets.filter(d=>d.visible&&d.panel===i);
+    renderSingle(c,dsList,{xLabel:true,legend:dsList.length>1});
+  }
 }
 
 function schedRender(){
@@ -570,41 +550,26 @@ function schedRender(){
 // ════════════════════════════════════════════
 // 9. BUILD PLOT AREA DOM
 // ════════════════════════════════════════════
+function panelLabel(i){
+  const names=datasets.filter(d=>d.visible&&d.panel===i).map(d=>d.name);
+  if(names.length) return names.join(' · ');
+  return gridRows*gridCols>1 ? `Panel ${i+1}` : '';
+}
+
 function buildPlotArea(){
   const area=document.getElementById('plot-area');
   area.innerHTML='';
-
-  if(layoutMode==='overlay'){
-    const c=mk('canvas'); c.id='ov-canvas'; c.style.cssText='width:100%;height:100%;display:block';
-    area.appendChild(c);
-
-  } else if(layoutMode==='stack'){
-    const cont=mk('div'); cont.className='stk-cont';
-    const vis=datasets.filter(d=>d.visible); const n=Math.max(1,vis.length);
-    for(let i=0;i<n;i++){
-      const row=mk('div'); row.className='stk-row';
-      const lbl=mk('div'); lbl.className='stk-lbl'; lbl.textContent=vis[i]?.name??'';
-      const c=mk('canvas'); c.style.cssText='width:100%;height:100%;display:block';
-      row.appendChild(lbl); row.appendChild(c); cont.appendChild(row);
-    }
-    area.appendChild(cont);
-
-  } else { // 2col
-    const cont=mk('div'); cont.className='col2-cont';
-    for(let i=0;i<2;i++){
-      const pane=mk('div'); pane.className='col2-pane';
-      const sel=mk('select'); sel.className='col2-sel'; sel.id=`col-sel-${i}`;
-      addOpt(sel,'','— select —');
-      for(const d of datasets) addOpt(sel,d.id,d.name);
-      if(col2Ids[i]) sel.value=col2Ids[i];
-      sel.onchange=()=>{ col2Ids[i]=parseInt(sel.value)||null; schedRender(); };
-      const c=mk('canvas'); c.id=`col-cv-${i}`; c.style.cssText='width:100%;flex:1;display:block';
-      pane.appendChild(sel); pane.appendChild(c); cont.appendChild(pane);
-    }
-    area.appendChild(cont);
+  const n=gridRows*gridCols;
+  const cont=mk('div'); cont.className='grid-cont';
+  cont.style.gridTemplateColumns=`repeat(${gridCols},1fr)`;
+  cont.style.gridTemplateRows=`repeat(${gridRows},1fr)`;
+  for(let i=0;i<n;i++){
+    const cell=mk('div'); cell.className='panel-cell';
+    const lbl=mk('div'); lbl.className='panel-lbl'; lbl.textContent=panelLabel(i);
+    const c=mk('canvas'); c.id=`panel-cv-${i}`;
+    cell.appendChild(lbl); cell.appendChild(c); cont.appendChild(cell);
   }
-
-  attachInteraction(area);
+  area.appendChild(cont);
   schedRender();
 }
 
@@ -612,12 +577,12 @@ function mk(tag){ return document.createElement(tag); }
 function addOpt(sel,val,txt){ const o=mk('option');o.value=val;o.textContent=txt;sel.appendChild(o); }
 
 // ════════════════════════════════════════════
-// 10. INTERACTION  (zoom / pan)
+// 10. INTERACTION  (zoom / pan)  — called once from init()
 // ════════════════════════════════════════════
 function attachInteraction(area){
   area.addEventListener('wheel', e=>{
     e.preventDefault();
-    const c=area.querySelector('canvas'); if(!c) return;
+    const c=getHoveredCanvas(e); if(!c) return;
     const cr=c.getBoundingClientRect();
     const frac=Math.max(0,Math.min(1,(e.clientX-cr.left-M.l)/(cr.width-M.l-M.r)));
     const fAtC=xRange[0]+frac*(xRange[1]-xRange[0]);
@@ -630,16 +595,17 @@ function attachInteraction(area){
   area.addEventListener('mousedown', e=>{
     if(e.button!==0) return;
     _drag=true; _dragX0=e.clientX; _dragRange0=[...xRange];
+    _dragCanvas=getHoveredCanvas(e);
   });
   window.addEventListener('mousemove', e=>{
     if(!_drag) return;
-    const c=area.querySelector('canvas'); if(!c) return;
+    const c=_dragCanvas||area.querySelector('canvas'); if(!c) return;
     const span=_dragRange0[1]-_dragRange0[0];
     const dx=(e.clientX-_dragX0)/(c.clientWidth-M.l-M.r)*span;
     xRange=[_dragRange0[0]-dx,_dragRange0[1]-dx];
     clampRange(); syncRngInputs(); schedRender();
   });
-  window.addEventListener('mouseup',()=>{ _drag=false; });
+  window.addEventListener('mouseup',()=>{ _drag=false; _dragCanvas=null; });
 
   area.addEventListener('dblclick',()=>{ resetRange(); });
   area.addEventListener('mousemove', onHover);
@@ -679,19 +645,13 @@ function getHoveredCanvas(e){
   return area.querySelector('canvas');
 }
 
-// Restrict the dataset search to whichever panel owns this canvas.
+// Map a canvas element to the datasets assigned to its panel.
 function datasetsForCanvas(canvas){
   if(!canvas) return datasets;
-  if(layoutMode==='overlay') return datasets;
-  if(layoutMode==='stack'){
-    const rows=[...document.querySelectorAll('.stk-row canvas')];
-    const idx=rows.indexOf(canvas);
-    const vis=datasets.filter(d=>d.visible);
-    return (idx>=0&&idx<vis.length)?[vis[idx]]:[];
-  }
-  if(layoutMode==='2col'){
-    if(canvas.id==='col-cv-0') return col2Ids[0]?datasets.filter(d=>d.id===col2Ids[0]):[];
-    if(canvas.id==='col-cv-1') return col2Ids[1]?datasets.filter(d=>d.id===col2Ids[1]):[];
+  const m=canvas.id.match(/^panel-cv-(\d+)$/);
+  if(m){
+    const i=parseInt(m[1]);
+    return datasets.filter(d=>d.visible&&d.panel===i);
   }
   return datasets;
 }
@@ -813,7 +773,7 @@ function addDataset(name, parsed){
     visible:true, normalized:false, scale:1.0,
     fwhm:null, lineshape:null,
     freqScale:1.0, freqOffset:0, baselineMode:'none',
-    _open:false
+    panel:0, _open:false
   };
   datasets.push(ds);
   if(datasets.length===1){
@@ -831,7 +791,7 @@ function addDataset(name, parsed){
 function removeDataset(id){
   datasets=datasets.filter(d=>d.id!==id);
   refreshSidebar();
-  if(layoutMode==='stack') buildPlotArea(); else schedRender();
+  buildPlotArea();
 }
 
 // ════════════════════════════════════════════
@@ -852,7 +812,7 @@ function refreshSidebar(){
     eye.addEventListener('click',e=>{
       e.stopPropagation(); ds.visible=!ds.visible;
       eye.textContent=ds.visible?'●':'○'; eye.className='ds-eye'+(ds.visible?' on':'');
-      if(layoutMode==='stack') buildPlotArea(); else schedRender();
+      buildPlotArea();
     });
 
     const nm=mk('span'); nm.className='ds-name'; nm.textContent=ds.name; nm.title=ds.name;
@@ -873,9 +833,18 @@ function refreshSidebar(){
   }
 }
 
+function panelOpts(cur){
+  const n=gridRows*gridCols; let s='';
+  for(let i=0;i<n;i++) s+=`<option value="${i}"${cur===i?' selected':''}>Panel ${i+1}</option>`;
+  return s;
+}
+
 function dsCtrlHTML(ds){
   const pp=[0.1,1,8,100].map(v=>`<button class="pre-btn${ds.scale===v?' on':''}" data-sc="${v}">×${v}</button>`).join('');
   return `
+  <div class="c-row"><span class="c-lbl">Panel</span>
+    <select class="c-sel" data-p="panel">${panelOpts(ds.panel)}</select>
+  </div>
   <div class="c-row"><span class="c-lbl">Scale</span>
     <div class="c-presets">${pp}</div>
     <input class="c-num" data-p="scale" type="number" value="${ds.scale}" min="0.001" step="0.1">
@@ -913,6 +882,10 @@ function wireDsCtrl(ctrl, ds){
   ctrl.querySelectorAll('[data-p]').forEach(el=>{
     el.addEventListener('change',()=>{
       const prop=el.dataset.p;
+      if(prop==='panel'){
+        ds.panel=parseInt(el.value)||0;
+        buildPlotArea(); return;
+      }
       const val=el.tagName==='SELECT'?el.value:(el.value===''?null:parseFloat(el.value));
       ds[prop]=val;
       if(['fwhm','freqScale','freqOffset'].includes(prop)) invalidate(ds);
@@ -945,7 +918,7 @@ function loadFiles(files){
       if(!parsed||!parsed.data.length){ alert(`Could not parse: ${f.name}`); return; }
       addDataset(f.name,parsed);
       refreshSidebar();
-      if(layoutMode==='stack') buildPlotArea(); else schedRender();
+      buildPlotArea();
     };
     r.readAsText(f);
   }
@@ -977,14 +950,21 @@ function exportPNG(){
 // 17. INIT
 // ════════════════════════════════════════════
 function init(){
-  // mode tabs
-  document.querySelectorAll('.mode-tab').forEach(btn=>{
-    btn.addEventListener('click',()=>{
-      layoutMode=btn.dataset.mode;
-      document.querySelectorAll('.mode-tab').forEach(b=>b.classList.toggle('active',b===btn));
-      buildPlotArea(); refreshSidebar();
-    });
-  });
+  // grid controls
+  const applyGrid=(r,c)=>{
+    gridRows=Math.max(1,Math.min(4,r|0));
+    gridCols=Math.max(1,Math.min(4,c|0));
+    document.getElementById('grid-rows').value=gridRows;
+    document.getElementById('grid-cols').value=gridCols;
+    const n=gridRows*gridCols;
+    datasets.forEach(d=>{ if(d.panel>=n) d.panel=0; });
+    refreshSidebar(); buildPlotArea();
+  };
+  document.getElementById('grid-rows').addEventListener('change',e=>applyGrid(+e.target.value,gridCols));
+  document.getElementById('grid-cols').addEventListener('change',e=>applyGrid(gridRows,+e.target.value));
+
+  // attach interaction once (plot-area element is permanent)
+  attachInteraction(document.getElementById('plot-area'));
 
   // file input
   document.getElementById('file-input').addEventListener('change',e=>loadFiles(e.target.files));
