@@ -536,7 +536,13 @@ function renderSingle(canvas, dsList, opts={}) {
   let yMax=0;
   const pds=vis.map(d=>{const pd=getPlotData(d);for(let i=0;i<pd.ys.length;i++)if(pd.ys[i]>yMax)yMax=pd.ys[i];return{ds:d,pd};});
   if(opts.fixedYMax>0) yMax=opts.fixedYMax;
-  else { if(yMax===0)yMax=1; yMax*=1.08; }
+  else {
+    if(yMax===0) yMax=1;
+    if(vis.some(d=>!d.normalized)) yMax*=1.08; // headroom only when unnormalized data present
+  }
+  // rescale normalized curves so their tallest peak = yMax
+  for(const{ds,pd}of pds)
+    if(ds.normalized) for(let j=0;j<pd.ys.length;j++) pd.ys[j]*=yMax;
   const T=makeT(W,H,xRange[0],xRange[1],yMax);
   drawGridLines(ctx,T); drawAxes(ctx,T,opts.xLabel!==false);
   for(const{ds,pd}of pds) drawCurve(ctx,pd.xs,pd.ys,ds.color,T);
