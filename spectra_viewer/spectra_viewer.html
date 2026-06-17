@@ -551,7 +551,8 @@ function renderAll(){
   for(let i=0;i<n;i++){
     const c=document.getElementById(`panel-cv-${i}`); if(!c) continue;
     const dsList=datasets.filter(d=>d.visible&&d.panel===i);
-    renderSingle(c,dsList,{xLabel:true,legend:dsList.length>1,fixedYMax:panelYMax[i]||null});
+    const bottomRow=Math.floor(i/gridCols)===gridRows-1;
+    renderSingle(c,dsList,{xLabel:bottomRow,legend:dsList.length>1,fixedYMax:panelYMax[i]||null});
   }
 }
 
