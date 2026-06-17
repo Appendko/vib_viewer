@@ -144,6 +144,10 @@ body.drag-over #plot-area::after{content:'Drop files here';position:absolute;
   inset:0;display:flex;align-items:center;justify-content:center;
   background:rgba(59,130,246,0.12);border:2px dashed var(--accent);
   font-size:1.1rem;color:#60a5fa;pointer-events:none;z-index:50}
+.panel-cell.panel-drop::after{content:'Drop here';position:absolute;
+  inset:0;display:flex;align-items:center;justify-content:center;
+  background:rgba(59,130,246,0.15);border:2px dashed var(--accent);
+  font-size:0.9rem;color:#60a5fa;pointer-events:none;z-index:50}
 </style>
 </head>
 <body>
@@ -648,6 +652,13 @@ function buildPlotArea(){
 
     const c=mk('canvas'); c.id=`panel-cv-${i}`;
     cell.appendChild(lbl); cell.appendChild(ymi); cell.appendChild(c);
+
+    // per-panel file drop
+    const pi=i;
+    cell.addEventListener('dragover',e=>{e.preventDefault();e.stopPropagation();cell.classList.add('panel-drop');});
+    cell.addEventListener('dragleave',e=>{if(!cell.contains(e.relatedTarget))cell.classList.remove('panel-drop');});
+    cell.addEventListener('drop',e=>{e.preventDefault();e.stopPropagation();cell.classList.remove('panel-drop');document.body.classList.remove('drag-over');loadFiles(e.dataTransfer.files,pi);});
+
     cont.appendChild(cell);
   }
   area.appendChild(cont);
@@ -874,14 +885,14 @@ function clearInfo(){
 // ════════════════════════════════════════════
 // 13. DATASET MANAGEMENT
 // ════════════════════════════════════════════
-function addDataset(name, parsed){
+function addDataset(name, parsed, panelIndex=0){
   const ds={
     id:nextId++, name, type:parsed.type, rawData:parsed.data,
     color:PALETTE[(datasets.length)%PALETTE.length],
     visible:true, normalized:false, scale:1.0,
     fwhm:null, lineshape:null,
     freqScale:1.0, freqOffset:0, baselineMode:'none',
-    panel:0, _open:false
+    panel:panelIndex, _open:false
   };
   datasets.push(ds);
   if(datasets.length===1){
@@ -1018,13 +1029,13 @@ function pickColor(ds, swatch){
 // ════════════════════════════════════════════
 // 15. FILE LOADING
 // ════════════════════════════════════════════
-function loadFiles(files){
+function loadFiles(files, panelIndex=0){
   for(const f of files){
     const r=new FileReader();
     r.onload=e=>{
       const parsed=parseFile(f.name,e.target.result);
       if(!parsed||!parsed.data.length){ alert(`Could not parse: ${f.name}`); return; }
-      addDataset(f.name,parsed);
+      addDataset(f.name,parsed,panelIndex);
       refreshSidebar();
       buildPlotArea();
     };
