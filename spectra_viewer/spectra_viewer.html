@@ -118,9 +118,9 @@ body{margin:0;padding:0;overflow:hidden;background:var(--bg);
 .panel-lbl:focus{background:var(--overlay-focus-bg);border-color:var(--subtle);color:var(--text-bright);cursor:text}
 .panel-ymax{position:absolute;top:3px;right:6px;width:72px;font-size:0.76rem;
   background:var(--ymax-bg);border:1px solid transparent;border-radius:3px;
-  color:var(--subtle);text-align:right;padding:1px 5px;z-index:2;outline:none;}
+  color:var(--subtle);text-align:right;padding:1px 5px;z-index:2;outline:none;opacity:0.15;}
 .panel-ymax:hover,.panel-ymax:focus{border-color:var(--muted);color:var(--text);
-  background:var(--ymax-focus-bg);}
+  background:var(--ymax-focus-bg);opacity:1;}
 /* info panel */
 #info-panel{background:var(--surface);border-top:1px solid var(--border);padding:6px 14px;
   font-size:0.84rem;min-height:28px;max-height:140px;overflow-y:auto;flex-shrink:0;color:var(--subtle)}
@@ -235,6 +235,7 @@ let _raf = null;
 let _drag = false, _dragX0 = 0, _dragRange0 = null, _dragCanvas = null;
 let _hoverF = null;
 let _hoverCanvas = null;
+let _legendBoxes = [];
 
 // ════════════════════════════════════════════
 // 3. PARSERS
@@ -530,18 +531,22 @@ function drawCurve(ctx, xs, ys, color, T) {
   ctx.stroke(); ctx.restore();
 }
 
-function drawLegend(ctx, dsList, W) {
+function drawLegend(ctx, dsList, canvas, W) {
   if(dsList.length<2) return;
+  _legendBoxes = _legendBoxes.filter(b=>b.canvas!==canvas);
   ctx.save(); ctx.font='12px sans-serif'; ctx.textBaseline='middle';
-  let lx=M.l+8, ly=M.t+9;
+  let ly = M.t + 9;
   for(const ds of dsList){
-    const name=ds.name.length>22?ds.name.slice(0,20)+'…':ds.name;
-    const tw=ctx.measureText(name).width;
-    ctx.fillStyle=getTheme().legendBg; ctx.fillRect(lx-3,ly-7,tw+21,16);
+    const name = ds.name.length>22 ? ds.name.slice(0,20)+'…' : ds.name;
+    const tw = ctx.measureText(name).width;
+    // right-align: swatch(13)+gap(4)+text(tw)+left-pad(3)+right-pad(1) → box right at W-M.r-3
+    const lx = W - M.r - tw - 21;
+    const bw = tw + 21;
+    ctx.fillStyle=getTheme().legendBg; ctx.fillRect(lx-3,ly-7,bw,16);
     ctx.fillStyle=ds.color; ctx.fillRect(lx,ly-4,13,8);
     ctx.fillStyle=getTheme().legendFg; ctx.fillText(name,lx+17,ly);
-    lx+=tw+28;
-    if(lx>W-M.r-90){lx=M.l+8;ly+=18;}
+    _legendBoxes.push({canvas, x:lx-3, y:ly-7, w:bw, h:16, ds});
+    ly += 18;
   }
   ctx.restore();
 }
@@ -582,7 +587,7 @@ function renderSingle(canvas, dsList, opts={}) {
   const T=makeT(W,H,xRange[0],xRange[1],yMax);
   drawGridLines(ctx,T); drawAxes(ctx,T,opts.xLabel!==false);
   for(const{ds,pd}of pds) drawCurve(ctx,pd.xs,pd.ys,ds.color,T);
-  if(opts.legend) drawLegend(ctx,vis,W);
+  if(opts.legend) drawLegend(ctx,vis,canvas,W);
   if(_hoverF!==null&&canvas===_hoverCanvas) drawCrosshair(ctx,T,_hoverF);
 }
 
@@ -809,11 +814,37 @@ function hideTooltip(){ document.getElementById('tooltip').style.display='none';
 function onClick(e){
   if(_drag) return; // drag end — ignore
   const cv=getHoveredCanvas(e);
+  if(!cv) return;
+  const rect=cv.getBoundingClientRect();
+  const cx=e.clientX-rect.left, cy=e.clientY-rect.top;
+  const box=_legendBoxes.find(b=>b.canvas===cv&&cx>=b.x&&cx<=b.x+b.w&&cy>=b.y&&cy<=b.y+b.h);
+  if(box){ startLegendEdit(box,rect); return; }
   const f=canvasF(cv,e.clientX); if(f===null) return;
   const dsList=datasetsForCanvas(cv);
   const snapped=snapToLocalMax(f,dsList);
   const hit=nearestPeak(snapped,dsList);
   if(hit) showInfo(hit.p,hit.ds); else clearInfo();
+}
+
+function startLegendEdit(box, canvasRect) {
+  const inp=mk('input'); inp.type='text'; inp.value=box.ds.name;
+  inp.style.cssText=`position:fixed;left:${canvasRect.left+box.x}px;top:${canvasRect.top+box.y}px;
+    width:${Math.max(box.w,90)}px;height:${box.h}px;z-index:200;
+    font:12px sans-serif;padding:0 4px;box-sizing:border-box;
+    background:var(--surface);border:1px solid var(--accent);border-radius:3px;
+    color:var(--text);outline:none;`;
+  document.body.appendChild(inp);
+  inp.focus(); inp.select();
+  let cancelled=false;
+  function commit(){
+    if(!cancelled){ const n=inp.value.trim(); if(n) box.ds.name=n; refreshSidebar(); renderAll(); }
+    inp.remove();
+  }
+  inp.addEventListener('blur',commit);
+  inp.addEventListener('keydown',ev=>{
+    if(ev.key==='Enter'){ev.preventDefault();inp.blur();}
+    if(ev.key==='Escape'){cancelled=true;inp.blur();}
+  });
 }
 
 // ════════════════════════════════════════════
