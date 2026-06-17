@@ -421,10 +421,12 @@ function niceStep(span, n) {
 }
 
 function fmtVal(v) {
+  if(!isFinite(v)) return '—';
   if(v===0)return'0'; if(v>=1e4)return(v/1e3).toFixed(0)+'k';
   if(v>=1e3)return(v/1e3).toFixed(1)+'k'; if(v>=100)return v.toFixed(0);
   if(v>=10)return v.toFixed(1); return v.toPrecision(2);
 }
+function safeFixed(v,d=2){ return isFinite(v)?v.toFixed(d):'—'; }
 
 // ════════════════════════════════════════════
 // 7. DRAWING PRIMITIVES
@@ -707,7 +709,7 @@ function onHover(e){
   const hit=nearestPeak(_hoverF,dsList);
   if(hit){
     const{p,ds}=hit;
-    const cf=(p.f*ds.freqScale+ds.freqOffset).toFixed(2);
+    const cf=safeFixed(p.f*ds.freqScale+ds.freqOffset,2);
     const inten=p.i*ds.scale;
     let html=`<div><b style="color:${ds.color}">${cf} cm⁻¹</b>`;
     if(isFinite(inten)) html+=`  ${fmtVal(inten)}`;
@@ -746,14 +748,15 @@ function onClick(e){
 // ════════════════════════════════════════════
 function showInfo(p,ds){
   const panel=document.getElementById('info-panel'); panel.className='has-data';
-  const cf=(p.f*ds.freqScale+ds.freqOffset).toFixed(2);
+  const cf=safeFixed(p.f*ds.freqScale+ds.freqOffset,2);
   let h=`<span style="color:${ds.color};font-weight:600">${cf} cm⁻¹</span>`;
   h+=`&nbsp;&nbsp;<span style="color:#9ca3af">${fmtVal(p.i*ds.scale)} km/mol</span>`;
-  const projs=p.projections||(p.label?[{label:p.label,pct:p.proj}]:[]);
+  const projs=p.projections||(p.label&&isFinite(p.proj)?[{label:p.label,pct:p.proj}]:[]);
   if(projs.length){
     h+='<table class="inf-table">';
     for(const pr of projs)
-      h+=`<tr><td class="lbl">${pr.label}</td><td class="pct">${pr.pct.toFixed(2)}%</td></tr>`;
+      if(pr.label&&isFinite(pr.pct))
+        h+=`<tr><td class="lbl">${pr.label}</td><td class="pct">${pr.pct.toFixed(2)}%</td></tr>`;
     h+='</table>';
   }
   panel.innerHTML=h;
