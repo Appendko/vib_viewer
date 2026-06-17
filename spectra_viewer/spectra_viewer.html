@@ -77,12 +77,12 @@ body{margin:0;padding:0;overflow:hidden;background:#111827;
 #plot-area{flex:1;position:relative;overflow:hidden;min-height:0;background:#111827}
 #plot-area canvas{display:block}
 /* grid panels */
-.grid-cont{width:100%;height:100%;display:grid;gap:2px;background:#0d1117}
+.grid-cont{width:100%;height:100%;display:grid;gap:1px;background:#0d1117}
 .panel-cell{position:relative;overflow:hidden;background:#111827;min-width:0;min-height:0}
 .panel-cell canvas{width:100%;height:100%;display:block}
-.panel-lbl{position:absolute;top:3px;left:76px;font-size:0.82rem;color:#9ca3af;
+.panel-lbl{position:absolute;top:3px;left:22px;font-size:0.82rem;color:#9ca3af;
   z-index:2;background:transparent;border:1px solid transparent;outline:none;
-  width:calc(55% - 80px);min-width:60px;padding:1px 4px;border-radius:3px;
+  width:calc(55% - 26px);min-width:60px;padding:1px 4px;border-radius:3px;
   white-space:nowrap;overflow:hidden;}
 .panel-lbl:hover{background:rgba(31,41,55,0.8);border-color:#4b5563;cursor:text}
 .panel-lbl:focus{background:rgba(17,24,39,0.9);border-color:#6b7280;color:#f3f4f6;cursor:text}
@@ -182,7 +182,7 @@ body.drag-over #plot-area::after{content:'Drop files here';position:absolute;
 // 1. CONSTANTS
 // ════════════════════════════════════════════
 const PALETTE = ['#22d3ee','#f59e0b','#a78bfa','#34d399','#f87171','#60a5fa','#fb923c','#e879f9'];
-const M = {t:14, r:18, b:52, l:72}; // plot margins px
+const M = {t:14, r:18, b:52, l:18}; // plot margins px (no Y labels → narrow left margin)
 const BRO_MIN = 0, BRO_MAX = 10000; // broadening grid range cm⁻¹
 
 // ════════════════════════════════════════════
@@ -383,13 +383,18 @@ function getPlotData(ds) {
       xs[i]=ds.rawData[i].f*sc+off; ys[i]=ds.rawData[i].i;
     }
   }
-  // baseline
+  // baseline — anchored to visible x range
   if (ds.baselineMode==='constant') {
-    let mn=Infinity; for (let i=0;i<ys.length;i++) if(ys[i]<mn) mn=ys[i];
-    if (mn>0) for (let i=0;i<ys.length;i++) ys[i]-=mn;
+    let mn=Infinity;
+    for (let i=0;i<xs.length;i++) if(xs[i]>=xRange[0]&&xs[i]<=xRange[1]&&ys[i]<mn) mn=ys[i];
+    if (isFinite(mn)) for (let i=0;i<ys.length;i++) ys[i]-=mn;
   } else if (ds.baselineMode==='linear') {
-    const n=ys.length;
-    if (n>1) { const sl=(ys[n-1]-ys[0])/(n-1); for(let i=0;i<n;i++) ys[i]-=ys[0]+sl*i; }
+    let li=-1, ri=-1;
+    for (let i=0;i<xs.length;i++) if(xs[i]>=xRange[0]&&xs[i]<=xRange[1]){if(li<0)li=i;ri=i;}
+    if (li>=0&&ri>li) {
+      const dx=xs[ri]-xs[li], y0=ys[li], slope=(ys[ri]-y0)/dx;
+      for (let i=0;i<ys.length;i++) ys[i]-=y0+slope*(xs[i]-xs[li]);
+    }
   }
   // scale + normalize
   for (let i=0;i<ys.length;i++) ys[i]*=ds.scale;
@@ -472,15 +477,7 @@ function drawAxes(ctx, T, showXLabel) {
   if(showXLabel){ctx.font='13px sans-serif';ctx.fillStyle='#6b7280';
     ctx.fillText('Wavenumber (cm⁻¹)',M.l+T.pw/2,T.H-14);}
 
-  // Y
-  const ys=niceStep(T.yMax,5);
-  ctx.textAlign='right'; ctx.textBaseline='middle'; ctx.font='12px sans-serif'; ctx.fillStyle='#9ca3af';
-  for(let y=0;y<=T.yMax+0.5*ys;y+=ys){
-    const py=T.fy(y);
-    if(py<M.t-2||py>M.t+T.ph+2) continue;
-    ctx.beginPath();ctx.moveTo(M.l-4,py);ctx.lineTo(M.l,py);ctx.stroke();
-    ctx.fillText(fmtVal(y),M.l-6,py);
-  }
+  // Y axis — no ticks or labels
   ctx.restore();
 }
 
@@ -876,7 +873,7 @@ function panelOpts(cur){
 }
 
 function dsCtrlHTML(ds){
-  const pp=[0.1,1,8,100].map(v=>`<button class="pre-btn${ds.scale===v?' on':''}" data-sc="${v}">×${v}</button>`).join('');
+  const pp=[0.1,1,10].map(v=>`<button class="pre-btn${ds.scale===v?' on':''}" data-sc="${v}">×${v}</button>`).join('');
   return `
   <div class="c-row"><span class="c-lbl">Panel</span>
     <select class="c-sel" data-p="panel">${panelOpts(ds.panel)}</select>
