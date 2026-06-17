@@ -182,7 +182,7 @@ body.drag-over #plot-area::after{content:'Drop files here';position:absolute;
 // 1. CONSTANTS
 // ════════════════════════════════════════════
 const PALETTE = ['#22d3ee','#f59e0b','#a78bfa','#34d399','#f87171','#60a5fa','#fb923c','#e879f9'];
-const M = {t:14, r:18, b:52, l:18}; // plot margins px (no Y labels → narrow left margin)
+const M = {t:14, r:18, b:26, l:18}; // b is overridden per-panel in renderSingle
 const BRO_MIN = 0, BRO_MAX = 10000; // broadening grid range cm⁻¹
 
 // ════════════════════════════════════════════
@@ -524,6 +524,7 @@ function drawCrosshair(ctx, T, f) {
 // 8. RENDER MODES
 // ════════════════════════════════════════════
 function renderSingle(canvas, dsList, opts={}) {
+  M.b = opts.xLabel !== false ? 50 : 26; // extra room only when x-axis label is drawn
   setupCanvas(canvas);
   const ctx=canvas.getContext('2d'), W=canvas.clientWidth, H=canvas.clientHeight;
   drawBg(ctx,W,H);
