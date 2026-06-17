@@ -13,6 +13,7 @@
   --text:#d1d5db;--text-bright:#f3f4f6;--text-max:#f9fafb;
   --accent:#3b82f6;
   --cv-axis:#4b5563;--cv-tick:#6b7280;
+  --hover-bg:rgba(55,65,81,0.5);
 }
 [data-theme="light"]{
   --bg:#ffffff;--surface:#f3f4f6;--border:#e5e7eb;
@@ -20,6 +21,7 @@
   --text:#374151;--text-bright:#1f2937;--text-max:#111827;
   --accent:#2563eb;
   --cv-axis:#9ca3af;--cv-tick:#9ca3af;
+  --hover-bg:rgba(0,0,0,0.06);
 }
     *, *::before, *::after { box-sizing: border-box; }
     body {
@@ -129,16 +131,16 @@
     .sort-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
     #mode-list { flex: 1; overflow-y: auto; border-radius: 6px; border: 1px solid var(--border); }
     .mode-row {
-      padding: 7px 10px; cursor: pointer; border-bottom: 1px solid var(--surface);
+      padding: 7px 10px; cursor: pointer; border-bottom: 1px solid var(--border);
       font-size: 0.82rem; display: grid;
       grid-template-columns: 2rem 1fr auto;
       gap: 4px; align-items: center;
       transition: background 0.1s;
     }
-    .mode-row:hover { background: var(--surface); }
+    .mode-row:hover { background: var(--hover-bg); }
     .mode-row.selected { background: #1d4ed8; }
     .mode-idx { color: var(--text-dim); font-size: 0.75rem; }
-    .mode-freq { font-weight: 600; color: #e5e7eb; }
+    .mode-freq { font-weight: 600; color: var(--text-max); }
     .mode-meta { font-size: 0.73rem; color: var(--text-dim); text-align: right; }
     /* ── Mode list min height ── */
     #mode-list-section { min-height: 120px; }
@@ -146,7 +148,7 @@
     #controls { padding: 10px 12px 4px; border-top: 1px solid var(--border); flex-shrink: 1; overflow-y: auto; }
     .ctrl-section-toggle {
       width: 100%; padding: 4px 0; background: none; border: none;
-      border-top: 1px solid var(--surface); color: var(--subtle); font-size: 0.76rem;
+      border-top: 1px solid var(--border); color: var(--subtle); font-size: 0.76rem;
       text-align: left; cursor: pointer; display: flex; align-items: center; gap: 5px;
       margin-top: 6px;
     }
