@@ -131,7 +131,8 @@ body.drag-over #plot-area::after{content:'Drop files here';position:absolute;
   <div class="top-ctl">
     <label><input type="checkbox" id="invert-y-cb"> Invert Y</label>
   </div>
-  <div style="margin-left:auto">
+  <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+    <label class="top-ctl"><input type="checkbox" id="export-transp-cb"> Transparent BG</label>
     <button id="export-btn">Export PNG</button>
   </div>
 </div>
@@ -527,7 +528,8 @@ function renderSingle(canvas, dsList, opts={}) {
   M.b = opts.xLabel !== false ? 50 : 26; // extra room only when x-axis label is drawn
   setupCanvas(canvas);
   const ctx=canvas.getContext('2d'), W=canvas.clientWidth, H=canvas.clientHeight;
-  drawBg(ctx,W,H);
+  if(opts.noBackground) ctx.clearRect(0,0,canvas.width,canvas.height);
+  else drawBg(ctx,W,H);
   const vis=dsList.filter(d=>d.visible);
   if(!vis.length){
     ctx.fillStyle='#374151';ctx.font='13px sans-serif';
@@ -970,21 +972,45 @@ function loadFiles(files){
 // ════════════════════════════════════════════
 function exportPNG(){
   const area=document.getElementById('plot-area');
-  const src=area.querySelector('canvas'); if(!src) return;
+  const areaCR=area.getBoundingClientRect();
   const dpr=devicePixelRatio||1;
-  const W=src.clientWidth*2, H=src.clientHeight*2;
-  const off=document.createElement('canvas'); off.width=W; off.height=H;
-  const ctx=off.getContext('2d'); ctx.scale(2,2);
-  const vis=datasets.filter(d=>d.visible);
-  drawBg(ctx,src.clientWidth,src.clientHeight);
-  let yMax=0;
-  const pds=vis.map(d=>{const pd=getPlotData(d);for(let i=0;i<pd.ys.length;i++)if(pd.ys[i]>yMax)yMax=pd.ys[i];return{ds:d,pd};});
-  if(!yMax)yMax=1; yMax*=1.08;
-  const T=makeT(src.clientWidth,src.clientHeight,xRange[0],xRange[1],yMax);
-  drawGridLines(ctx,T); drawAxes(ctx,T,true);
-  for(const{ds,pd}of pds) drawCurve(ctx,pd.xs,pd.ys,ds.color,T);
-  drawLegend(ctx,vis,src.clientWidth);
-  off.toBlob(blob=>{ const a=mk('a');a.href=URL.createObjectURL(blob);a.download='spectrum.png';a.click(); });
+  const W=Math.round(areaCR.width), H=Math.round(areaCR.height);
+  const transp=document.getElementById('export-transp-cb').checked;
+
+  const off=document.createElement('canvas');
+  off.width=W*dpr; off.height=H*dpr;
+  const ctx=off.getContext('2d'); ctx.scale(dpr,dpr);
+  if(!transp){ ctx.fillStyle='#111827'; ctx.fillRect(0,0,W,H); }
+
+  const n=gridRows*gridCols;
+  for(let i=0;i<n;i++){
+    const c=document.getElementById(`panel-cv-${i}`); if(!c) continue;
+    const cr=c.getBoundingClientRect();
+    const px=Math.round(cr.left-areaCR.left);
+    const py=Math.round(cr.top-areaCR.top);
+    const cW=Math.round(cr.width), cH=Math.round(cr.height);
+
+    if(!transp){
+      // opaque: live canvas already has correct background — just copy it
+      ctx.drawImage(c,px,py,cW,cH);
+    } else {
+      // transparent: render panel to a hidden temp canvas without background
+      const tmp=document.createElement('canvas');
+      tmp.style.cssText=`position:absolute;top:-9999px;left:-9999px;width:${cW}px;height:${cH}px`;
+      document.body.appendChild(tmp);
+      const dsList=datasets.filter(d=>d.visible&&d.panel===i);
+      const bottomRow=Math.floor(i/gridCols)===gridRows-1;
+      renderSingle(tmp,dsList,{xLabel:bottomRow,legend:dsList.length>1,
+        fixedYMax:panelYMax[i]||null,noBackground:true});
+      ctx.drawImage(tmp,px,py,cW,cH);
+      document.body.removeChild(tmp);
+    }
+  }
+
+  off.toBlob(blob=>{
+    const a=mk('a'); a.href=URL.createObjectURL(blob);
+    a.download='spectrum.png'; a.click();
+  });
 }
 
 // ════════════════════════════════════════════
