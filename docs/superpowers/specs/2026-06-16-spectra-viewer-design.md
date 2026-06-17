@@ -152,12 +152,15 @@ Both axes drawn via Canvas 2D:
 **Reset:** double-click → restore full freq range.  
 **Freq range inputs** in sidebar stay synchronized with plot zoom.
 
-**Hover:** crosshair line at cursor freq + nearest-peak label as floating tooltip (for peak data; skipped for continuous).
+**Hover:** crosshair line at cursor freq + floating tooltip showing the nearest peak within ±5 cm⁻¹:
+- `.out` / `.spec` data: `freq cm⁻¹  intensity` on line 1, then up to 3 projection lines (`label  pct%`) below
+- Continuous data: `freq cm⁻¹  intensity` only
+- No tooltip if no peak is within tolerance
 
 **Click-to-inspect:** click anywhere on plot →
 - Finds nearest peak from any visible `.spec`/`.out` dataset within ±5 cm⁻¹ tolerance
-- Opens peak info panel below plot:
-  - `.out` data: full projection table (bra|ket, %, formatted nicely)
+- Opens peak info panel below plot (persists until next click):
+  - `.out` data: full projection table (all terms up to cumsum 99%, bra|ket + %, formatted)
   - `.spec` data: dominant assignment label + %
   - Continuous data: freq + intensity at click point
 
@@ -179,7 +182,7 @@ Both axes drawn via Canvas 2D:
 | Global freq range slider | synced to plot zoom |
 | Intensity threshold filter | for peak-type data only |
 | Click-to-inspect | full projection for .out |
-| Hover crosshair + tooltip | nearest peak label |
+| Hover crosshair + tooltip | nearest peak label + up to 3 projections |
 | Zoom/pan/reset | scroll, drag, double-click |
 | Inverted y-axis | for transmittance-style |
 | Export PNG | canvas toBlob download |
