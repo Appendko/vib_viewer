@@ -153,6 +153,13 @@ body.drag-over #plot-area::after{content:'Drop files here';position:absolute;
   inset:0;display:flex;align-items:center;justify-content:center;
   background:rgba(59,130,246,0.15);border:2px dashed var(--accent);
   font-size:0.9rem;color:#60a5fa;pointer-events:none;z-index:50}
+/* ── advanced section ── */
+#adv-section{border-top:1px solid var(--border);margin-top:2px;padding-top:4px}
+#adv-toggle{width:100%;padding:2px 0;background:none;border:none;
+  color:var(--text-dim);font-size:0.71rem;text-align:left;cursor:pointer;
+  display:flex;align-items:center;gap:4px}
+#adv-toggle:hover{color:var(--text)}
+#adv-body{display:flex;flex-direction:column;gap:4px;margin-top:4px}
 /* ── remote file browser ── */
 #remote-btn{width:100%;padding:4px 0;background:none;border:none;
   color:var(--subtle);font-size:0.76rem;text-align:left;cursor:pointer;
@@ -205,12 +212,7 @@ body.drag-over #plot-area::after{content:'Drop files here';position:absolute;
     ×
     <input class="grid-n" id="grid-cols" type="number" min="1" max="4" value="1">
   </div>
-  <div class="sep"></div>
-  <div class="top-ctl">
-    <label><input type="checkbox" id="invert-y-cb"> Invert Y</label>
-  </div>
   <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
-    <label class="top-ctl"><input type="checkbox" id="export-transp-cb"> Transparent BG</label>
     <button id="theme-btn" title="Toggle dark/light mode" style="padding:3px 8px;border:1px solid var(--border);border-radius:5px;background:var(--border);color:var(--text-dim);font-size:0.88rem;cursor:pointer">☀</button>
     <button id="export-btn">Export PNG</button>
   </div>
@@ -223,11 +225,6 @@ body.drag-over #plot-area::after{content:'Drop files here';position:absolute;
       <button id="load-btn">+ Load file(s)
         <input type="file" id="file-input" multiple
           accept=".peak,.spec,.out,.jdx,.dx,.csv,.txt,.dat">
-      </button>
-      <button id="remote-btn">
-        📂 Remote Files
-        <span id="remote-status-dot" style="width:7px;height:7px;border-radius:50%;background:var(--border);display:inline-block;flex-shrink:0"></span>
-        <span id="remote-status-txt" style="font-size:0.65rem;color:var(--text-dim)">—</span>
       </button>
       <div class="g-lbl">Next dataset</div>
       <div class="c-row">
@@ -268,10 +265,28 @@ body.drag-over #plot-area::after{content:'Drop files here';position:absolute;
         <input class="rng-num" id="xmax-in" type="number" value="4000">
         <button class="ico-btn" id="reset-rng" title="Reset to data range">↺</button>
       </div>
-      <div class="g-lbl">Intensity threshold</div>
-      <div class="sl-row">
-        <input type="range" id="thresh-sl" min="0" max="100" step="0.5" value="0">
-        <span id="thresh-val">0</span>
+      <div id="adv-section">
+        <button id="adv-toggle"><span id="adv-arrow">▸</span> Advanced</button>
+        <div id="adv-body" style="display:none">
+          <button id="remote-btn" style="display:none">
+            📂 Remote Files
+            <span id="remote-status-dot" style="width:7px;height:7px;border-radius:50%;background:var(--border);display:inline-block;flex-shrink:0"></span>
+            <span id="remote-status-txt" style="font-size:0.65rem;color:var(--text-dim)">—</span>
+          </button>
+          <label class="c-row" style="cursor:pointer"><input type="checkbox" id="adv-remote-cb"> Show Remote Files</label>
+          <div class="g-lbl">Intensity threshold</div>
+          <div class="sl-row">
+            <input type="range" id="thresh-sl" min="0" max="100" step="0.5" value="0">
+            <span id="thresh-val">0</span>
+          </div>
+          <label class="c-row" style="cursor:pointer"><input type="checkbox" id="invert-y-cb"> Invert Y</label>
+          <label class="c-row" style="cursor:pointer"><input type="checkbox" id="export-transp-cb"> Transparent BG</label>
+          <div class="g-lbl">X-axis direction</div>
+          <div class="ls-row">
+            <button class="c-tog on" id="xdir-ltr">low→high</button>
+            <button class="c-tog" id="xdir-rtl">high→low</button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -305,6 +320,7 @@ let panelYMax = [];   // user-set y max per panel; null/undefined = auto
 let globalFwhm = 10;
 let globalLineshape = 'lorentzian';
 let invertY = false;
+let xReversed = false;
 let intensThreshold = 0;
 let _raf = null;
 let _drag = false, _dragX0 = 0, _dragRange0 = null, _dragCanvas = null;
@@ -540,8 +556,8 @@ function setupCanvas(canvas) {
 function makeT(W, H, xMin, xMax, yMax) {
   const pw=W-M.l-M.r, ph=H-M.t-M.b, xs=xMax-xMin||1;
   return { W,H,xMin,xMax,yMax,pw,ph,
-    fx: f => M.l+(f-xMin)/xs*pw,
-    xf: px => xMin+(px-M.l)/pw*xs,
+    fx: f => xReversed ? M.l+pw-(f-xMin)/xs*pw : M.l+(f-xMin)/xs*pw,
+    xf: px => xReversed ? xMax-(px-M.l)/pw*xs : xMin+(px-M.l)/pw*xs,
     fy: i => invertY ? M.t+(i/yMax)*ph : M.t+ph-(i/yMax)*ph };
 }
 
@@ -774,10 +790,10 @@ function attachInteraction(area){
     const c=getHoveredCanvas(e); if(!c) return;
     const cr=c.getBoundingClientRect();
     const frac=Math.max(0,Math.min(1,(e.clientX-cr.left-M.l)/(cr.width-M.l-M.r)));
-    const fAtC=xRange[0]+frac*(xRange[1]-xRange[0]);
+    const fAtC=xReversed ? xRange[1]-frac*(xRange[1]-xRange[0]) : xRange[0]+frac*(xRange[1]-xRange[0]);
     const factor=e.deltaY>0?1.12:1/1.12;
     const span=(xRange[1]-xRange[0])*factor;
-    xRange=[fAtC-frac*span, fAtC+(1-frac)*span];
+    xRange=xReversed ? [fAtC-(1-frac)*span, fAtC+frac*span] : [fAtC-frac*span, fAtC+(1-frac)*span];
     clampRange(); syncRngInputs(); schedRender();
   },{passive:false});
 
@@ -791,7 +807,7 @@ function attachInteraction(area){
     const c=_dragCanvas||area.querySelector('canvas'); if(!c) return;
     const span=_dragRange0[1]-_dragRange0[0];
     const dx=(e.clientX-_dragX0)/(c.clientWidth-M.l-M.r)*span;
-    xRange=[_dragRange0[0]-dx,_dragRange0[1]-dx];
+    xRange=xReversed ? [_dragRange0[0]+dx,_dragRange0[1]+dx] : [_dragRange0[0]-dx,_dragRange0[1]-dx];
     clampRange(); syncRngInputs(); schedRender();
   });
   window.addEventListener('mouseup',()=>{ _drag=false; _dragCanvas=null; });
@@ -850,7 +866,8 @@ function canvasF(canvas, clientX){
   const cr=canvas.getBoundingClientRect();
   const px=clientX-cr.left;
   if(px<M.l||px>cr.width-M.r) return null;
-  return xRange[0]+(px-M.l)/(cr.width-M.l-M.r)*(xRange[1]-xRange[0]);
+  const frac=(px-M.l)/(cr.width-M.l-M.r);
+  return xReversed ? xRange[1]-frac*(xRange[1]-xRange[0]) : xRange[0]+frac*(xRange[1]-xRange[0]);
 }
 
 // Snap cursor frequency to the nearest local maximum of the broadened curve.
@@ -1358,6 +1375,33 @@ function init(){
     document.getElementById('ls-gau').classList.add('on');
     document.getElementById('ls-lor').classList.remove('on');
     invalidate(); schedRender();
+  });
+
+  // advanced section toggle
+  document.getElementById('adv-toggle').addEventListener('click',()=>{
+    const body=document.getElementById('adv-body');
+    const open=body.style.display==='none';
+    body.style.display=open?'':'none';
+    document.getElementById('adv-arrow').textContent=open?'▾':'▸';
+  });
+
+  // show/hide remote files button
+  document.getElementById('adv-remote-cb').addEventListener('change',e=>{
+    document.getElementById('remote-btn').style.display=e.target.checked?'':'none';
+  });
+
+  // x-axis direction
+  document.getElementById('xdir-ltr').addEventListener('click',()=>{
+    xReversed=false;
+    document.getElementById('xdir-ltr').classList.add('on');
+    document.getElementById('xdir-rtl').classList.remove('on');
+    schedRender();
+  });
+  document.getElementById('xdir-rtl').addEventListener('click',()=>{
+    xReversed=true;
+    document.getElementById('xdir-rtl').classList.add('on');
+    document.getElementById('xdir-ltr').classList.remove('on');
+    schedRender();
   });
 
   // invert Y
