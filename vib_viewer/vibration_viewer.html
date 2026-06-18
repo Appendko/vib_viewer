@@ -245,27 +245,59 @@
     #gif-status { font-size: 0.72rem; color: var(--subtle); text-align: center; margin-top: 3px; min-height: 1em; }
     /* ── HPC file browser ── */
     #hpc-section { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 6px; }
-    #hpc-toggle {
+    #hpc-btn {
       width: 100%; padding: 3px 0; background: none; border: none;
       color: var(--subtle); font-size: 0.76rem; text-align: left; cursor: pointer;
       display: flex; align-items: center; gap: 5px;
     }
-    #hpc-toggle:hover { color: var(--text-dim); }
-    #hpc-path-row { display: flex; gap: 4px; margin: 5px 0 4px; }
+    #hpc-btn:hover { color: var(--text-dim); }
+    #hpc-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.55); z-index: 500;
+      align-items: center; justify-content: center;
+    }
+    #hpc-overlay.open { display: flex; }
+    #hpc-modal {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+      width: min(460px, 90vw); max-height: 75vh;
+      display: flex; flex-direction: column;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5); overflow: hidden;
+    }
+    #hpc-modal-hdr {
+      display: flex; align-items: center; gap: 6px;
+      padding: 10px 12px 9px; border-bottom: 1px solid var(--border);
+      font-size: 0.82rem; font-weight: 600; color: var(--text); flex-shrink: 0;
+    }
+    #hpc-modal-hdr .hpc-title { flex: 1; }
+    #hpc-close {
+      background: none; border: none; color: var(--text-dim);
+      font-size: 16px; cursor: pointer; padding: 0 2px; line-height: 1;
+    }
+    #hpc-close:hover { color: var(--text); }
+    #hpc-roots { display: flex; flex-wrap: wrap; gap: 5px; padding: 8px 12px 4px; flex-shrink: 0; }
+    #hpc-roots:empty { display: none; }
+    .hpc-root {
+      padding: 2px 10px; border-radius: 12px; font-size: 0.72rem; cursor: pointer;
+      background: var(--border); color: var(--text-dim); border: 1px solid transparent;
+    }
+    .hpc-root:hover { color: var(--text); border-color: var(--accent); }
+    .hpc-root.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    #hpc-path-row { display: flex; gap: 4px; padding: 6px 12px 4px; flex-shrink: 0; }
     #hpc-path {
       flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
-      color: var(--text); font-size: 0.72rem; padding: 2px 5px; outline: none;
+      color: var(--text); font-size: 0.72rem; padding: 3px 6px; outline: none;
     }
     #hpc-path:focus { border-color: var(--accent); }
     #hpc-up {
-      padding: 2px 7px; background: var(--border); border: 1px solid var(--border);
+      padding: 2px 8px; background: var(--border); border: 1px solid var(--border);
       border-radius: 4px; color: var(--text-dim); font-size: 0.72rem; cursor: pointer;
     }
-    #hpc-up:hover { color: var(--text); }
-    #hpc-list { max-height: 180px; overflow-y: auto; }
+    #hpc-up:hover:not(:disabled) { color: var(--text); }
+    #hpc-up:disabled { opacity: 0.35; cursor: default; }
+    #hpc-list { flex: 1; overflow-y: auto; padding: 4px 12px 10px; }
     .hpc-item {
-      padding: 3px 4px; border-radius: 3px; cursor: pointer;
-      font-size: 0.74rem; color: var(--text-dim);
+      padding: 4px 6px; border-radius: 4px; cursor: pointer;
+      font-size: 0.78rem; color: var(--text-dim);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .hpc-item:hover { background: var(--hover-bg); color: var(--text); }
@@ -288,19 +320,11 @@
 
       <!-- ── HPC file browser ── -->
       <div id="hpc-section">
-        <button id="hpc-toggle">
+        <button id="hpc-btn">
           📂 HPC Files
           <span id="hpc-status-dot" style="width:7px;height:7px;border-radius:50%;background:var(--border);display:inline-block;flex-shrink:0"></span>
           <span id="hpc-status-txt" style="font-size:0.65rem;color:var(--text-dim)">—</span>
-          <span id="hpc-arrow" style="margin-left:auto">▸</span>
         </button>
-        <div id="hpc-body" style="display:none">
-          <div id="hpc-path-row">
-            <input id="hpc-path" type="text" value="/home" placeholder="/home">
-            <button id="hpc-up" title="Parent directory">↑</button>
-          </div>
-          <div id="hpc-list"></div>
-        </div>
       </div>
 
       <div id="analysis-section" style="display:none">
@@ -458,6 +482,25 @@
   </div>
 
   <div id="drop-overlay">Drop .log / .out / .hess / .fchk / .json / .cjson file here</div>
+
+  <!-- ── HPC file picker modal ── -->
+  <div id="hpc-overlay">
+    <div id="hpc-modal">
+      <div id="hpc-modal-hdr">
+        <span class="hpc-title">📂 HPC Files</span>
+        <span id="hpc-status-dot" style="width:8px;height:8px;border-radius:50%;background:var(--border);display:inline-block;flex-shrink:0"></span>
+        <span id="hpc-status-txt" style="font-size:0.68rem;color:var(--text-dim)">—</span>
+        <button id="hpc-close">✕</button>
+      </div>
+      <div id="hpc-roots"></div>
+      <div id="hpc-path-row">
+        <button id="hpc-up" disabled title="Parent directory">↑</button>
+        <input id="hpc-path" type="text" placeholder="/home">
+      </div>
+      <div id="hpc-list"></div>
+    </div>
+  </div>
+
   <div id="canvas-container">
     <div id="select-rect"></div>
     <div id="spectrum-panel">
@@ -2403,6 +2446,7 @@
     // ── HPC file browser ──
     const HPC_BASE = 'http://localhost:8765';
     let hpcPath = '/home';
+    let hpcLastParent = null;
 
     async function hpcPing() {
       const dot = document.getElementById('hpc-status-dot');
@@ -2412,9 +2456,42 @@
         const t = setTimeout(() => ctrl.abort(), 3000);
         const r = await fetch(`${HPC_BASE}/api/ping`, {signal: ctrl.signal});
         clearTimeout(t);
-        if (r.ok) { dot.style.background='#22c55e'; txt.textContent='connected'; return true; }
+        if (r.ok) {
+          dot.style.background = '#22c55e'; txt.textContent = 'connected';
+          const info = await r.json();
+          hpcRenderRoots(info.roots || {});
+          const start = Object.values(info.roots || {})[0] || info.allowed_root || '/home';
+          await hpcLs(start);
+          return true;
+        }
       } catch(e) {}
       dot.style.background = '#ef4444'; txt.textContent = 'unreachable'; return false;
+    }
+
+    function hpcRenderRoots(roots) {
+      const el = document.getElementById('hpc-roots');
+      el.innerHTML = '';
+      for (const [name, path] of Object.entries(roots)) {
+        const chip = document.createElement('button');
+        chip.className = 'hpc-root';
+        chip.textContent = name;
+        chip.title = path;
+        chip.addEventListener('click', () => {
+          document.querySelectorAll('.hpc-root').forEach(c => c.classList.remove('active'));
+          chip.classList.add('active');
+          hpcLs(path);
+        });
+        el.appendChild(chip);
+      }
+    }
+
+    function hpcSyncNav(data) {
+      hpcPath = data.path;
+      hpcLastParent = data.parent;
+      document.getElementById('hpc-path').value = data.path;
+      document.getElementById('hpc-up').disabled = data.parent === null;
+      document.querySelectorAll('.hpc-root').forEach(c =>
+        c.classList.toggle('active', c.title === data.path));
     }
 
     async function hpcLs(path) {
@@ -2427,8 +2504,7 @@
         clearTimeout(t);
         if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
         const data = await r.json();
-        hpcPath = path;
-        document.getElementById('hpc-path').value = path;
+        hpcSyncNav(data);
         hpcRenderList(data.entries);
       } catch (err) {
         list.innerHTML = `<div class="hpc-item" style="color:#f87171;pointer-events:none">${err.name==='AbortError'?'Timeout':err.message}</div>`;
@@ -2448,11 +2524,9 @@
         clearTimeout(t);
         if (r.ok) {
           const data = await r.json();
-          hpcPath = path;
-          document.getElementById('hpc-path').value = path;
+          hpcSyncNav(data);
           hpcRenderList(data.entries);
         } else {
-          // Not a directory — treat as file
           list.innerHTML = '';
           document.getElementById('hpc-path').value = hpcPath;
           await hpcFetchFile(path, path.split('/').pop() || path);
@@ -2465,7 +2539,6 @@
     function hpcRenderList(items) {
       const list = document.getElementById('hpc-list');
       list.innerHTML = '';
-      items.sort((a,b) => (b.is_dir - a.is_dir) || a.name.localeCompare(b.name));
       if (!items.length) {
         list.innerHTML = '<div class="hpc-item" style="pointer-events:none;opacity:0.5">Empty</div>';
         return;
@@ -2473,12 +2546,11 @@
       for (const item of items) {
         const row = document.createElement('div');
         row.className = 'hpc-item';
-        row.title = item.name;
+        row.title = item.path || item.name;
         row.textContent = (item.is_dir ? '📁 ' : '📄 ') + item.name;
         row.addEventListener('click', () => {
-          const p = hpcPath.replace(/\/$/, '') + '/' + item.name;
-          if (item.is_dir) hpcLs(p);
-          else hpcFetchFile(p, item.name);
+          if (item.is_dir) hpcLs(item.path || hpcPath.replace(/\/$/, '') + '/' + item.name);
+          else hpcFetchFile(item.path || hpcPath.replace(/\/$/, '') + '/' + item.name, item.name);
         });
         list.appendChild(row);
       }
@@ -2494,6 +2566,7 @@
         if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
         const data = await r.json();
         loadFromText(data.content, data.filename);
+        document.getElementById('hpc-overlay').classList.remove('open');
       } catch (err) {
         document.getElementById('status-msg').textContent =
           'HPC error: ' + (err.name==='AbortError'?'Timeout':err.message);
@@ -2907,28 +2980,26 @@
 
     // ── HPC file browser ──
     (function () {
-      const toggle  = document.getElementById('hpc-toggle');
-      const body    = document.getElementById('hpc-body');
-      const arrow   = document.getElementById('hpc-arrow');
-      const pathIn  = document.getElementById('hpc-path');
-      const upBtn   = document.getElementById('hpc-up');
+      const btn      = document.getElementById('hpc-btn');
+      const hpcOvl   = document.getElementById('hpc-overlay');
+      const closeBtn = document.getElementById('hpc-close');
+      const pathIn   = document.getElementById('hpc-path');
+      const upBtn    = document.getElementById('hpc-up');
       let pinged = false;
 
-      toggle.addEventListener('click', () => {
-        const open = body.style.display === 'none';
-        body.style.display = open ? '' : 'none';
-        arrow.textContent  = open ? '▾' : '▸';
-        if (open && !pinged) { pinged = true; hpcPing().then(ok => { if (ok) hpcLs(hpcPath); }); }
+      btn.addEventListener('click', () => {
+        hpcOvl.classList.add('open');
+        if (!pinged) { pinged = true; hpcPing(); }
       });
+      closeBtn.addEventListener('click', () => hpcOvl.classList.remove('open'));
+      hpcOvl.addEventListener('click', e => { if (e.target === hpcOvl) hpcOvl.classList.remove('open'); });
 
       pathIn.addEventListener('keydown', e => {
         if (e.key === 'Enter') hpcNavigate(pathIn.value.trim() || '/');
       });
 
       upBtn.addEventListener('click', () => {
-        const parts = hpcPath.replace(/\/+$/, '').split('/');
-        parts.pop();
-        hpcLs(parts.join('/') || '/');
+        if (hpcLastParent) hpcLs(hpcLastParent);
       });
     })();
 
