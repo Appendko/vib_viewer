@@ -3013,16 +3013,22 @@ ${SNIPPET_RENDERER}
       fab.innerHTML = '<span id="embed-freq-label">—</span><span style="font-size:16px">⚙️</span>';
       cc.appendChild(fab);
 
-      // Close button inside panel header
-      const header = document.getElementById('panel-header');
-      header.style.position = 'relative';
+      // In embedded mode, theme toggle and nav link are irrelevant — hide them
+      const themeBtn = document.getElementById('theme-btn');
+      if (themeBtn) themeBtn.style.display = 'none';
+      const navLink = document.querySelector('#panel-header a[href*="spectra_viewer"]');
+      if (navLink) navLink.style.display = 'none';
+
+      // Close button: insert into the existing flex title row (not absolute-positioned,
+      // so it's never covered by the panel-header's overflow-y scrollbar)
+      const titleRow = document.querySelector('#panel-header > div');
       const closeBtn = document.createElement('button');
       closeBtn.id = 'embed-close-btn';
       closeBtn.textContent = '✕';
       closeBtn.style.cssText =
-        'position:absolute;top:8px;right:8px;background:none;border:none;' +
-        'color:#9ca3af;font-size:18px;cursor:pointer;line-height:1;padding:2px 4px;';
-      header.insertBefore(closeBtn, header.firstChild);
+        'background:none;border:none;color:#9ca3af;font-size:18px;' +
+        'cursor:pointer;line-height:1;padding:2px 4px;flex-shrink:0;margin-left:auto;';
+      titleRow.appendChild(closeBtn);
 
       // Open / close helpers
       const openDrawer  = () => { panel.style.transform = 'translateX(0)';    backdrop.style.display = 'block'; };
