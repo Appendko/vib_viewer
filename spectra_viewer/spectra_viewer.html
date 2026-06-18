@@ -198,6 +198,12 @@ body.drag-over #plot-area::after{content:'Drop files here';position:absolute;
   font-size:0.78rem;color:var(--text-dim);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .remote-item:hover{background:var(--hover-bg);color:var(--text)}
+.remote-item.selected{background:rgba(59,130,246,0.15);color:var(--text)}
+.remote-item.selected:hover{background:rgba(59,130,246,0.22)}
+#remote-footer{padding:6px 12px 10px;flex-shrink:0;border-top:1px solid var(--border);display:none}
+#remote-load-btn{width:100%;padding:5px;background:var(--accent);border:none;border-radius:5px;
+  color:#fff;font-size:0.78rem;cursor:pointer}
+#remote-load-btn:hover{opacity:0.88}
 </style>
 </head>
 <body>
@@ -1447,6 +1453,9 @@ document.body.insertAdjacentHTML('beforeend', `
       <input id="remote-path" type="text" placeholder="/home">
     </div>
     <div id="remote-list"></div>
+    <div id="remote-footer">
+      <button id="remote-load-btn">Load 0 files</button>
+    </div>
   </div>
 </div>`);
 
@@ -1457,6 +1466,7 @@ document.body.insertAdjacentHTML('beforeend', `
 const REMOTE_BASE = 'http://localhost:8765';
 let remotePath = '/home';
 let remoteLastParent = null;
+let remoteSelected = new Map(); // path → filename
 
 function loadFromText(text, filename, panelIndex) {
   const parsed = parseFile(filename, text);
@@ -1545,14 +1555,30 @@ async function remoteNavigate(rawPath) {
     } else {
       list.innerHTML = '';
       document.getElementById('remote-path').value = remotePath;
-      await remoteFetchFile(path, path.split('/').pop() || path);
+      try {
+        await remoteFetchFile(path, path.split('/').pop() || path);
+        document.getElementById('remote-overlay').classList.remove('open');
+      } catch(err) {
+        alert('Remote error: ' + (err.name === 'AbortError' ? 'Timeout' : err.message));
+      }
     }
   } catch(err) {
     list.innerHTML = `<div class="remote-item" style="color:#f87171;pointer-events:none">${err.name==='AbortError'?'Timeout':err.message}</div>`;
   }
 }
 
+function remoteUpdateFooter() {
+  const footer = document.getElementById('remote-footer');
+  const btn    = document.getElementById('remote-load-btn');
+  const n = remoteSelected.size;
+  footer.style.display = n > 0 ? 'block' : 'none';
+  btn.textContent = `Load ${n} file${n === 1 ? '' : 's'}`;
+}
+
 function remoteRenderList(items) {
+  // clear selection whenever we land in a new directory
+  remoteSelected.clear();
+  remoteUpdateFooter();
   const list = document.getElementById('remote-list');
   list.innerHTML = '';
   if (!items.length) {
@@ -1560,31 +1586,54 @@ function remoteRenderList(items) {
     return;
   }
   for (const item of items) {
+    const path = item.path || remotePath.replace(/\/$/, '') + '/' + item.name;
     const row = document.createElement('div');
     row.className = 'remote-item';
-    row.title = item.path || item.name;
+    row.title = path;
     row.textContent = (item.is_dir ? '📁 ' : '📄 ') + item.name;
     row.addEventListener('click', () => {
-      if (item.is_dir) remoteLs(item.path || remotePath.replace(/\/$/, '') + '/' + item.name);
-      else remoteFetchFile(item.path || remotePath.replace(/\/$/, '') + '/' + item.name, item.name);
+      if (item.is_dir) {
+        remoteLs(path);
+      } else {
+        if (remoteSelected.has(path)) {
+          remoteSelected.delete(path);
+          row.classList.remove('selected');
+        } else {
+          remoteSelected.set(path, item.name);
+          row.classList.add('selected');
+        }
+        remoteUpdateFooter();
+      }
     });
     list.appendChild(row);
   }
 }
 
 async function remoteFetchFile(path, filename) {
-  try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 15000);
-    const r = await fetch(`${REMOTE_BASE}/api/file?path=${encodeURIComponent(path)}`, {signal: ctrl.signal});
-    clearTimeout(t);
-    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-    const data = await r.json();
-    loadFromText(data.content, data.filename);
-    document.getElementById('remote-overlay').classList.remove('open');
-  } catch(err) {
-    alert('Remote error: ' + (err.name === 'AbortError' ? 'Timeout' : err.message));
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 15000);
+  const r = await fetch(`${REMOTE_BASE}/api/file?path=${encodeURIComponent(path)}`, {signal: ctrl.signal});
+  clearTimeout(t);
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+  const data = await r.json();
+  loadFromText(data.content, data.filename);
+}
+
+async function remoteLoadSelected() {
+  const btn = document.getElementById('remote-load-btn');
+  btn.disabled = true;
+  const entries = [...remoteSelected.entries()];
+  const errors = [];
+  for (const [path, filename] of entries) {
+    try {
+      await remoteFetchFile(path, filename);
+    } catch(err) {
+      errors.push(`${filename}: ${err.name === 'AbortError' ? 'Timeout' : err.message}`);
+    }
   }
+  btn.disabled = false;
+  if (errors.length) alert('Some files failed:\n' + errors.join('\n'));
+  else document.getElementById('remote-overlay').classList.remove('open');
 }
 
 // wiring
@@ -1593,6 +1642,7 @@ const overlay  = document.getElementById('remote-overlay');
 const closeBtn = document.getElementById('remote-close');
 const pathIn   = document.getElementById('remote-path');
 const upBtn    = document.getElementById('remote-up');
+const loadBtn  = document.getElementById('remote-load-btn');
 let pinged = false;
 
 btn.addEventListener('click', () => {
@@ -1603,6 +1653,7 @@ closeBtn.addEventListener('click', () => overlay.classList.remove('open'));
 overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('open'); });
 pathIn.addEventListener('keydown', e => { if (e.key === 'Enter') remoteNavigate(pathIn.value.trim() || '/'); });
 upBtn.addEventListener('click', () => { if (remoteLastParent) remoteLs(remoteLastParent); });
+loadBtn.addEventListener('click', remoteLoadSelected);
 })();
 </script>
 </body>
