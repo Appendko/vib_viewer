@@ -65,11 +65,11 @@ The status dot turns green when the tunnel is active. Click a folder to navigate
 | `VIB_ROOTS` | — | Comma-separated `name=path` pairs for shortcut chips in the UI. Example: `scratch=/scratch/myuser,proj=/data/proj`. Each path must exist. `home` pointing to `VIB_ROOT` is always added automatically. |
 | `VIB_PORT` | UID-derived | Port to listen on. By default the server uses your user ID as the port number (unique per account, no conflicts on shared machines). Set this if you need a specific port. |
 
-## Supported file types
+## File filtering in the remote picker
 
-vib_viewer: `.log`, `.out`, `.hess`, `.fchk`, `.json`, `.cjson`
+vib_viewer filters the listing to: `.log`, `.out`, `.hess`, `.fchk`, `.json`, `.cjson`
 
-spectra_viewer: `.peak`, `.spec`, `.jdx`, `.dx`, `.csv`, `.txt`, `.dat`
+spectra_viewer shows all files (no extension filter).
 
 ## Security notes
 
