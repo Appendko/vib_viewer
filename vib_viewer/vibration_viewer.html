@@ -2488,8 +2488,8 @@
         const r = await fetch(`${HPC_BASE}/api/file?path=${encodeURIComponent(path)}`, {signal: ctrl.signal});
         clearTimeout(t);
         if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-        const text = await r.text();
-        loadFromText(text, filename);
+        const data = await r.json();
+        loadFromText(data.content, data.filename);
       } catch (err) {
         document.getElementById('status-msg').textContent =
           'HPC error: ' + (err.name==='AbortError'?'Timeout':err.message);
