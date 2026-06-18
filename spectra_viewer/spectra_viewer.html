@@ -329,7 +329,9 @@ function parseOut(text) {
     const p = line.split(','); if (p.length < 3) continue;
     const f0 = p[0].trim(), f1 = p[1].trim();
     if (f0 !== '' && f1 !== '') {
-      cur = {f:+f0, i:+f1, label:p[2].trim(), proj:parseFloat(p[3]), projections:[]};
+      const fv=+f0, iv=+f1;
+      if(!isFinite(fv)||!isFinite(iv)) continue;
+      cur = {f:fv, i:iv, label:p[2].trim(), proj:parseFloat(p[3]), projections:[]};
       cur.projections.push({label:cur.label, pct:cur.proj});
       data.push(cur);
     } else if (cur && f0==='' && f1==='') {
@@ -833,7 +835,7 @@ function nearestPeak(f, dsList){
     for(const p of ds.rawData){
       if(p.i<=intensThreshold) continue;
       const cf=p.f*ds.freqScale+ds.freqOffset;
-      if(Math.abs(cf-f)>tol) continue;
+      if(!isFinite(cf)||Math.abs(cf-f)>tol) continue;
       const si=p.i*ds.scale;
       if(si>bestI){bestI=si;best={p,ds};}
     }
