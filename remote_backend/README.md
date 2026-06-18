@@ -16,13 +16,13 @@ pip install fastapi uvicorn
 
 ```sh
 # Default: browse from $HOME
-python remote_server.py
+python remote_backend.py
 
 # Custom root
-VIB_ROOT=/data/projects python remote_server.py
+VIB_ROOT=/data/projects python remote_backend.py
 
 # Named shortcut chips in the UI
-VIB_ROOTS="scratch=/scratch/myuser,work=/data/work" python remote_server.py
+VIB_ROOTS="scratch=/scratch/myuser,work=/data/work" python remote_backend.py
 ```
 
 ### 2. Open an SSH tunnel on your local machine

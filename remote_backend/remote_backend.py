@@ -14,15 +14,15 @@ Quick start
 
 3. Start the server:
 
-       python hpc_server.py
+       python remote_backend.py
 
    Default browsing root is $HOME. Override with VIB_ROOT:
 
-       VIB_ROOT=/data/projects python hpc_server.py
+       VIB_ROOT=/data/projects python remote_backend.py
 
    Add named shortcut chips to the UI with VIB_ROOTS:
 
-       VIB_ROOTS="scratch=/scratch/myuser,work=/data/work" python hpc_server.py
+       VIB_ROOTS="scratch=/scratch/myuser,work=/data/work" python remote_backend.py
 
 4. On your local machine, open an SSH tunnel:
 
