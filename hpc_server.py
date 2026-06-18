@@ -56,17 +56,22 @@ def _parse_roots() -> dict:
 
 ROOTS = _parse_roots()
 
+# All directories the browser is allowed to browse under
+_ALLOWED_ROOTS: list[Path] = list({Path(p) for p in ROOTS.values()} | {ALLOWED_ROOT})
+
 SUPPORTED_EXTENSIONS = {".log", ".out", ".hess", ".fchk", ".json", ".cjson"}
 
 
 def safe_path(path: str) -> Path:
-    """Resolve path and ensure it stays within ALLOWED_ROOT."""
+    """Resolve path and ensure it falls under at least one allowed root."""
     p = Path(path).resolve()
-    try:
-        p.relative_to(ALLOWED_ROOT)
-    except ValueError:
-        raise HTTPException(status_code=403, detail=f"Path outside allowed root: {ALLOWED_ROOT}")
-    return p
+    for root in _ALLOWED_ROOTS:
+        try:
+            p.relative_to(root)
+            return p
+        except ValueError:
+            pass
+    raise HTTPException(status_code=403, detail=f"Path outside allowed roots")
 
 
 # ── endpoints ────────────────────────────────────────────────────────────────
@@ -82,7 +87,7 @@ def list_dir(path: str = Query(default=str(ALLOWED_ROOT))):
     """
     List directory contents.
     Returns folders first, then supported files, both sorted alphabetically.
-    parent is null when already at ALLOWED_ROOT (disables the ↑ button).
+    parent is null when already at a root directory (disables the ↑ button).
     """
     p = safe_path(path)
 
@@ -107,9 +112,10 @@ def list_dir(path: str = Query(default=str(ALLOWED_ROOT))):
     except PermissionError:
         raise HTTPException(status_code=403, detail=f"Permission denied: {path}")
 
+    at_root = p in _ALLOWED_ROOTS
     return {
         "path": str(p),
-        "parent": str(p.parent) if p != ALLOWED_ROOT else None,
+        "parent": None if at_root else str(p.parent),
         "entries": entries,
     }
 
