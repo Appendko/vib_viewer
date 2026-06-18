@@ -243,64 +243,64 @@
     }
     #gif-btn { width: 100%; margin-top: 5px; }
     #gif-status { font-size: 0.72rem; color: var(--subtle); text-align: center; margin-top: 3px; min-height: 1em; }
-    /* ── HPC file browser ── */
-    #hpc-section { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 6px; }
-    #hpc-btn {
+    /* ── Remote file browser ── */
+    #remote-section { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 6px; }
+    #remote-btn {
       width: 100%; padding: 3px 0; background: none; border: none;
       color: var(--subtle); font-size: 0.76rem; text-align: left; cursor: pointer;
       display: none; align-items: center; gap: 5px;
     }
-    #hpc-btn:hover { color: var(--text-dim); }
-    #hpc-overlay {
+    #remote-btn:hover { color: var(--text-dim); }
+    #remote-overlay {
       display: none; position: fixed; inset: 0;
       background: rgba(0,0,0,0.55); z-index: 500;
       align-items: center; justify-content: center;
     }
-    #hpc-overlay.open { display: flex; }
-    #hpc-modal {
+    #remote-overlay.open { display: flex; }
+    #remote-modal {
       background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
       width: min(460px, 90vw); max-height: 75vh;
       display: flex; flex-direction: column;
       box-shadow: 0 20px 60px rgba(0,0,0,0.5); overflow: hidden;
     }
-    #hpc-modal-hdr {
+    #remote-modal-hdr {
       display: flex; align-items: center; gap: 6px;
       padding: 10px 12px 9px; border-bottom: 1px solid var(--border);
       font-size: 0.82rem; font-weight: 600; color: var(--text); flex-shrink: 0;
     }
-    #hpc-modal-hdr .hpc-title { flex: 1; }
-    #hpc-close {
+    #remote-modal-hdr .remote-title { flex: 1; }
+    #remote-close {
       background: none; border: none; color: var(--text-dim);
       font-size: 16px; cursor: pointer; padding: 0 2px; line-height: 1;
     }
-    #hpc-close:hover { color: var(--text); }
-    #hpc-roots { display: flex; flex-wrap: wrap; gap: 5px; padding: 8px 12px 4px; flex-shrink: 0; }
-    #hpc-roots:empty { display: none; }
-    .hpc-root {
+    #remote-close:hover { color: var(--text); }
+    #remote-roots { display: flex; flex-wrap: wrap; gap: 5px; padding: 8px 12px 4px; flex-shrink: 0; }
+    #remote-roots:empty { display: none; }
+    .remote-root {
       padding: 2px 10px; border-radius: 12px; font-size: 0.72rem; cursor: pointer;
       background: var(--border); color: var(--text-dim); border: 1px solid transparent;
     }
-    .hpc-root:hover { color: var(--text); border-color: var(--accent); }
-    .hpc-root.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-    #hpc-path-row { display: flex; gap: 4px; padding: 6px 12px 4px; flex-shrink: 0; }
-    #hpc-path {
+    .remote-root:hover { color: var(--text); border-color: var(--accent); }
+    .remote-root.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    #remote-path-row { display: flex; gap: 4px; padding: 6px 12px 4px; flex-shrink: 0; }
+    #remote-path {
       flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
       color: var(--text); font-size: 0.72rem; padding: 3px 6px; outline: none;
     }
-    #hpc-path:focus { border-color: var(--accent); }
-    #hpc-up {
+    #remote-path:focus { border-color: var(--accent); }
+    #remote-up {
       padding: 2px 8px; background: var(--border); border: 1px solid var(--border);
       border-radius: 4px; color: var(--text-dim); font-size: 0.72rem; cursor: pointer;
     }
-    #hpc-up:hover:not(:disabled) { color: var(--text); }
-    #hpc-up:disabled { opacity: 0.35; cursor: default; }
-    #hpc-list { flex: 1; overflow-y: auto; padding: 4px 12px 10px; }
-    .hpc-item {
+    #remote-up:hover:not(:disabled) { color: var(--text); }
+    #remote-up:disabled { opacity: 0.35; cursor: default; }
+    #remote-list { flex: 1; overflow-y: auto; padding: 4px 12px 10px; }
+    .remote-item {
       padding: 4px 6px; border-radius: 4px; cursor: pointer;
       font-size: 0.78rem; color: var(--text-dim);
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .hpc-item:hover { background: var(--hover-bg); color: var(--text); }
+    .remote-item:hover { background: var(--hover-bg); color: var(--text); }
   </style>
 </head>
 <body>
@@ -319,11 +319,11 @@
       <div id="file-name"></div>
 
       <!-- ── Remote file browser ── -->
-      <div id="hpc-section">
-        <button id="hpc-btn">
+      <div id="remote-section">
+        <button id="remote-btn">
           📂 Remote Files
-          <span id="hpc-status-dot" style="width:7px;height:7px;border-radius:50%;background:var(--border);display:inline-block;flex-shrink:0"></span>
-          <span id="hpc-status-txt" style="font-size:0.65rem;color:var(--text-dim)">—</span>
+          <span id="remote-status-dot" style="width:7px;height:7px;border-radius:50%;background:var(--border);display:inline-block;flex-shrink:0"></span>
+          <span id="remote-status-txt" style="font-size:0.65rem;color:var(--text-dim)">—</span>
         </button>
       </div>
 
@@ -447,7 +447,7 @@
     <button id="advanced-toggle">▸ Advanced</button>
     <div id="advanced-body">
       <label class="adv-label" style="display:flex;align-items:center;gap:5px;cursor:pointer;margin-top:0">
-        <input type="checkbox" id="hpc-remote-cb"> Show Remote Files
+        <input type="checkbox" id="remote-remote-cb"> Show Remote Files
       </label>
       <div class="adv-label">Rectangle select behavior</div>
       <div class="method-bar" id="rect-mode-bar" style="margin-top:0">
@@ -487,20 +487,20 @@
   <div id="drop-overlay">Drop .log / .out / .hess / .fchk / .json / .cjson file here</div>
 
   <!-- ── Remote file picker modal ── -->
-  <div id="hpc-overlay">
-    <div id="hpc-modal">
-      <div id="hpc-modal-hdr">
-        <span class="hpc-title">📂 Remote Files</span>
-        <span id="hpc-status-dot" style="width:8px;height:8px;border-radius:50%;background:var(--border);display:inline-block;flex-shrink:0"></span>
-        <span id="hpc-status-txt" style="font-size:0.68rem;color:var(--text-dim)">—</span>
-        <button id="hpc-close">✕</button>
+  <div id="remote-overlay">
+    <div id="remote-modal">
+      <div id="remote-modal-hdr">
+        <span class="remote-title">📂 Remote Files</span>
+        <span id="remote-status-dot" style="width:8px;height:8px;border-radius:50%;background:var(--border);display:inline-block;flex-shrink:0"></span>
+        <span id="remote-status-txt" style="font-size:0.68rem;color:var(--text-dim)">—</span>
+        <button id="remote-close">✕</button>
       </div>
-      <div id="hpc-roots"></div>
-      <div id="hpc-path-row">
-        <button id="hpc-up" disabled title="Parent directory">↑</button>
-        <input id="hpc-path" type="text" placeholder="/home">
+      <div id="remote-roots"></div>
+      <div id="remote-path-row">
+        <button id="remote-up" disabled title="Parent directory">↑</button>
+        <input id="remote-path" type="text" placeholder="/home">
       </div>
-      <div id="hpc-list"></div>
+      <div id="remote-list"></div>
     </div>
   </div>
 
@@ -2444,133 +2444,133 @@
       reader.readAsText(file);
     }
 
-    // ── HPC file browser ──
-    const HPC_BASE = 'http://localhost:8765';
-    let hpcPath = '/home';
-    let hpcLastParent = null;
+    // ── Remote file browser ──
+    const REMOTE_BASE = 'http://localhost:8765';
+    let remotePath = '/home';
+    let remoteLastParent = null;
 
-    async function hpcPing() {
-      const dot = document.getElementById('hpc-status-dot');
-      const txt = document.getElementById('hpc-status-txt');
+    async function remotePing() {
+      const dot = document.getElementById('remote-status-dot');
+      const txt = document.getElementById('remote-status-txt');
       try {
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), 3000);
-        const r = await fetch(`${HPC_BASE}/api/ping`, {signal: ctrl.signal});
+        const r = await fetch(`${REMOTE_BASE}/api/ping`, {signal: ctrl.signal});
         clearTimeout(t);
         if (r.ok) {
           dot.style.background = '#22c55e'; txt.textContent = 'connected';
           const info = await r.json();
-          hpcRenderRoots(info.roots || {});
+          remoteRenderRoots(info.roots || {});
           const start = Object.values(info.roots || {})[0] || info.allowed_root || '/home';
-          await hpcLs(start);
+          await remoteLs(start);
           return true;
         }
       } catch(e) {}
       dot.style.background = '#ef4444'; txt.textContent = 'unreachable'; return false;
     }
 
-    function hpcRenderRoots(roots) {
-      const el = document.getElementById('hpc-roots');
+    function remoteRenderRoots(roots) {
+      const el = document.getElementById('remote-roots');
       el.innerHTML = '';
       for (const [name, path] of Object.entries(roots)) {
         const chip = document.createElement('button');
-        chip.className = 'hpc-root';
+        chip.className = 'remote-root';
         chip.textContent = name;
         chip.title = path;
         chip.addEventListener('click', () => {
-          document.querySelectorAll('.hpc-root').forEach(c => c.classList.remove('active'));
+          document.querySelectorAll('.remote-root').forEach(c => c.classList.remove('active'));
           chip.classList.add('active');
-          hpcLs(path);
+          remoteLs(path);
         });
         el.appendChild(chip);
       }
     }
 
-    function hpcSyncNav(data) {
-      hpcPath = data.path;
-      hpcLastParent = data.parent;
-      document.getElementById('hpc-path').value = data.path;
-      document.getElementById('hpc-up').disabled = data.parent === null;
-      document.querySelectorAll('.hpc-root').forEach(c =>
+    function remoteSyncNav(data) {
+      remotePath = data.path;
+      remoteLastParent = data.parent;
+      document.getElementById('remote-path').value = data.path;
+      document.getElementById('remote-up').disabled = data.parent === null;
+      document.querySelectorAll('.remote-root').forEach(c =>
         c.classList.toggle('active', c.title === data.path));
     }
 
-    async function hpcLs(path) {
-      const list = document.getElementById('hpc-list');
-      list.innerHTML = '<div class="hpc-item" style="pointer-events:none;opacity:0.5">Loading…</div>';
+    async function remoteLs(path) {
+      const list = document.getElementById('remote-list');
+      list.innerHTML = '<div class="remote-item" style="pointer-events:none;opacity:0.5">Loading…</div>';
       try {
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), 5000);
-        const r = await fetch(`${HPC_BASE}/api/ls?path=${encodeURIComponent(path)}&exts=.log,.out,.hess,.fchk,.json,.cjson`, {signal: ctrl.signal});
+        const r = await fetch(`${REMOTE_BASE}/api/ls?path=${encodeURIComponent(path)}&exts=.log,.out,.hess,.fchk,.json,.cjson`, {signal: ctrl.signal});
         clearTimeout(t);
         if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
         const data = await r.json();
-        hpcSyncNav(data);
-        hpcRenderList(data.entries);
+        remoteSyncNav(data);
+        remoteRenderList(data.entries);
       } catch (err) {
-        list.innerHTML = `<div class="hpc-item" style="color:#f87171;pointer-events:none">${err.name==='AbortError'?'Timeout':err.message}</div>`;
+        list.innerHTML = `<div class="remote-item" style="color:#f87171;pointer-events:none">${err.name==='AbortError'?'Timeout':err.message}</div>`;
       }
     }
 
-    async function hpcNavigate(rawPath) {
+    async function remoteNavigate(rawPath) {
       const path = rawPath.startsWith('/')
         ? rawPath
-        : hpcPath.replace(/\/$/, '') + '/' + rawPath;
-      const list = document.getElementById('hpc-list');
-      list.innerHTML = '<div class="hpc-item" style="pointer-events:none;opacity:0.5">Loading…</div>';
+        : remotePath.replace(/\/$/, '') + '/' + rawPath;
+      const list = document.getElementById('remote-list');
+      list.innerHTML = '<div class="remote-item" style="pointer-events:none;opacity:0.5">Loading…</div>';
       try {
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), 5000);
-        const r = await fetch(`${HPC_BASE}/api/ls?path=${encodeURIComponent(path)}&exts=.log,.out,.hess,.fchk,.json,.cjson`, {signal: ctrl.signal});
+        const r = await fetch(`${REMOTE_BASE}/api/ls?path=${encodeURIComponent(path)}&exts=.log,.out,.hess,.fchk,.json,.cjson`, {signal: ctrl.signal});
         clearTimeout(t);
         if (r.ok) {
           const data = await r.json();
-          hpcSyncNav(data);
-          hpcRenderList(data.entries);
+          remoteSyncNav(data);
+          remoteRenderList(data.entries);
         } else {
           list.innerHTML = '';
-          document.getElementById('hpc-path').value = hpcPath;
-          await hpcFetchFile(path, path.split('/').pop() || path);
+          document.getElementById('remote-path').value = remotePath;
+          await remoteFetchFile(path, path.split('/').pop() || path);
         }
       } catch (err) {
-        list.innerHTML = `<div class="hpc-item" style="color:#f87171;pointer-events:none">${err.name==='AbortError'?'Timeout':err.message}</div>`;
+        list.innerHTML = `<div class="remote-item" style="color:#f87171;pointer-events:none">${err.name==='AbortError'?'Timeout':err.message}</div>`;
       }
     }
 
-    function hpcRenderList(items) {
-      const list = document.getElementById('hpc-list');
+    function remoteRenderList(items) {
+      const list = document.getElementById('remote-list');
       list.innerHTML = '';
       if (!items.length) {
-        list.innerHTML = '<div class="hpc-item" style="pointer-events:none;opacity:0.5">Empty</div>';
+        list.innerHTML = '<div class="remote-item" style="pointer-events:none;opacity:0.5">Empty</div>';
         return;
       }
       for (const item of items) {
         const row = document.createElement('div');
-        row.className = 'hpc-item';
+        row.className = 'remote-item';
         row.title = item.path || item.name;
         row.textContent = (item.is_dir ? '📁 ' : '📄 ') + item.name;
         row.addEventListener('click', () => {
-          if (item.is_dir) hpcLs(item.path || hpcPath.replace(/\/$/, '') + '/' + item.name);
-          else hpcFetchFile(item.path || hpcPath.replace(/\/$/, '') + '/' + item.name, item.name);
+          if (item.is_dir) remoteLs(item.path || remotePath.replace(/\/$/, '') + '/' + item.name);
+          else remoteFetchFile(item.path || remotePath.replace(/\/$/, '') + '/' + item.name, item.name);
         });
         list.appendChild(row);
       }
     }
 
-    async function hpcFetchFile(path, filename) {
-      document.getElementById('status-msg').textContent = 'Fetching from HPC…';
+    async function remoteFetchFile(path, filename) {
+      document.getElementById('status-msg').textContent = 'Fetching from Remote…';
       try {
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), 15000);
-        const r = await fetch(`${HPC_BASE}/api/file?path=${encodeURIComponent(path)}`, {signal: ctrl.signal});
+        const r = await fetch(`${REMOTE_BASE}/api/file?path=${encodeURIComponent(path)}`, {signal: ctrl.signal});
         clearTimeout(t);
         if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
         const data = await r.json();
         loadFromText(data.content, data.filename);
-        document.getElementById('hpc-overlay').classList.remove('open');
+        document.getElementById('remote-overlay').classList.remove('open');
       } catch (err) {
         document.getElementById('status-msg').textContent =
-          'HPC error: ' + (err.name==='AbortError'?'Timeout':err.message);
+          'Remote error: ' + (err.name==='AbortError'?'Timeout':err.message);
       }
     }
 
@@ -2979,32 +2979,32 @@
       if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
     });
 
-    // ── HPC file browser ──
+    // ── Remote file browser ──
     (function () {
-      document.getElementById('hpc-remote-cb').addEventListener('change', e => {
-        document.getElementById('hpc-btn').style.display = e.target.checked ? 'flex' : 'none';
+      document.getElementById('remote-remote-cb').addEventListener('change', e => {
+        document.getElementById('remote-btn').style.display = e.target.checked ? 'flex' : 'none';
       });
 
-      const btn      = document.getElementById('hpc-btn');
-      const hpcOvl   = document.getElementById('hpc-overlay');
-      const closeBtn = document.getElementById('hpc-close');
-      const pathIn   = document.getElementById('hpc-path');
-      const upBtn    = document.getElementById('hpc-up');
+      const btn      = document.getElementById('remote-btn');
+      const remoteOvl   = document.getElementById('remote-overlay');
+      const closeBtn = document.getElementById('remote-close');
+      const pathIn   = document.getElementById('remote-path');
+      const upBtn    = document.getElementById('remote-up');
       let pinged = false;
 
       btn.addEventListener('click', () => {
-        hpcOvl.classList.add('open');
-        if (!pinged) { pinged = true; hpcPing(); }
+        remoteOvl.classList.add('open');
+        if (!pinged) { pinged = true; remotePing(); }
       });
-      closeBtn.addEventListener('click', () => hpcOvl.classList.remove('open'));
-      hpcOvl.addEventListener('click', e => { if (e.target === hpcOvl) hpcOvl.classList.remove('open'); });
+      closeBtn.addEventListener('click', () => remoteOvl.classList.remove('open'));
+      remoteOvl.addEventListener('click', e => { if (e.target === remoteOvl) remoteOvl.classList.remove('open'); });
 
       pathIn.addEventListener('keydown', e => {
-        if (e.key === 'Enter') hpcNavigate(pathIn.value.trim() || '/');
+        if (e.key === 'Enter') remoteNavigate(pathIn.value.trim() || '/');
       });
 
       upBtn.addEventListener('click', () => {
-        if (hpcLastParent) hpcLs(hpcLastParent);
+        if (remoteLastParent) remoteLs(remoteLastParent);
       });
     })();
 
