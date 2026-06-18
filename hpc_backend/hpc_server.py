@@ -2,20 +2,50 @@
 """
 HPC File Browser Backend for vib_viewer
 ========================================
-Serves file listings and file content from the HPC filesystem
-to the vib_viewer running on https://appendko.github.io
+Serves file listings and file content from a remote filesystem
+to the vib_viewer running in your browser.
 
-Usage:
-    pip install fastapi uvicorn
-    python hpc_server.py
+Quick start
+-----------
+1. Copy this file to your remote machine.
+2. Install dependencies (one-time):
 
-    # With named root shortcuts shown as chips in the UI:
-    VIB_ROOTS="scratch=/scratch/user,work=/home/user/projects" python hpc_server.py
+       pip install fastapi uvicorn
 
-Then on your Mac:
-    ssh -L 8765:localhost:8765 user@hpc
+3. Start the server:
 
-Open vib_viewer in your browser and click "📂 HPC Files".
+       python hpc_server.py
+
+   Default browsing root is $HOME. Override with VIB_ROOT:
+
+       VIB_ROOT=/data/projects python hpc_server.py
+
+   Add named shortcut chips to the UI with VIB_ROOTS:
+
+       VIB_ROOTS="scratch=/scratch/myuser,work=/data/work" python hpc_server.py
+
+4. On your local machine, open an SSH tunnel:
+
+       ssh -L 8765:localhost:8765 user@remote-host
+
+5. Open vib_viewer in your browser and click "📂 HPC Files".
+
+Environment variables
+---------------------
+VIB_ROOT    Single root directory the server is allowed to serve.
+            Defaults to $HOME.
+
+VIB_ROOTS   Comma-separated name=path pairs for the shortcut chips
+            shown at the top of the file picker dialog.
+            Example: VIB_ROOTS="scratch=/scratch/myuser,proj=/data/proj"
+            Each path must exist and be a directory.
+            "home" is always added automatically pointing to VIB_ROOT.
+
+Security
+--------
+The server only responds to GET requests and only serves files/directories
+that fall under one of the configured roots. It binds to 127.0.0.1 only,
+so it is not reachable from outside the machine without an SSH tunnel.
 """
 
 from fastapi import FastAPI, HTTPException, Query
@@ -23,9 +53,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 import os
 
-app = FastAPI(title="vib_viewer HPC backend")
+app = FastAPI(title="vib_viewer remote backend")
 
-# Allow requests from GitHub Pages (and localhost for testing)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -37,12 +66,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ── safety: restrict browsing to paths under this root ──────────────────────
+# ── allowed roots ────────────────────────────────────────────────────────────
+
 ALLOWED_ROOT = Path(os.environ.get("VIB_ROOT", Path.home())).resolve()
 
-# ── named shortcuts shown as chips in the UI ────────────────────────────────
-# Format: VIB_ROOTS="name=/path,name2=/path2"
-def _parse_roots() -> dict:
+
+def _parse_roots():
     roots = {}
     for item in os.environ.get("VIB_ROOTS", "").split(","):
         item = item.strip()
@@ -54,16 +83,15 @@ def _parse_roots() -> dict:
     roots.setdefault("home", str(ALLOWED_ROOT))
     return roots
 
-ROOTS = _parse_roots()
 
-# All directories the browser is allowed to browse under
+ROOTS = _parse_roots()
 _ALLOWED_ROOTS = list({Path(p) for p in ROOTS.values()} | {ALLOWED_ROOT})
 
 SUPPORTED_EXTENSIONS = {".log", ".out", ".hess", ".fchk", ".json", ".cjson"}
 
 
 def safe_path(path: str) -> Path:
-    """Resolve path and ensure it falls under at least one allowed root."""
+    """Resolve path and verify it falls under at least one allowed root."""
     p = Path(path).resolve()
     for root in _ALLOWED_ROOTS:
         try:
@@ -71,23 +99,23 @@ def safe_path(path: str) -> Path:
             return p
         except ValueError:
             pass
-    raise HTTPException(status_code=403, detail=f"Path outside allowed roots")
+    raise HTTPException(status_code=403, detail="Path outside allowed roots")
 
 
-# ── endpoints ────────────────────────────────────────────────────────────────
+# ── endpoints ─────────────────────────────────────────────────────────────────
 
 @app.get("/api/ping")
 def ping():
-    """Health check — returns roots for the UI chip bar."""
+    """Health check — also returns named roots for the UI chip bar."""
     return {"status": "ok", "allowed_root": str(ALLOWED_ROOT), "roots": ROOTS}
 
 
 @app.get("/api/ls")
 def list_dir(path: str = Query(default=str(ALLOWED_ROOT))):
     """
-    List directory contents.
-    Returns folders first, then supported files, both sorted alphabetically.
-    parent is null when already at a root directory (disables the ↑ button).
+    List directory contents (folders first, then supported files, both
+    sorted alphabetically). parent is null when at a root directory,
+    which disables the ↑ button in the UI.
     """
     p = safe_path(path)
 
@@ -144,6 +172,4 @@ if __name__ == "__main__":
     import uvicorn
     print(f"Serving files under: {ALLOWED_ROOT}")
     print(f"Named roots: {ROOTS}")
-    print(f"Override root with: VIB_ROOT=/path/to/data python hpc_server.py")
-    print(f"Add shortcuts with: VIB_ROOTS=\"scratch=/scratch/user,work=/home/user/work\" python hpc_server.py")
     uvicorn.run(app, host="127.0.0.1", port=8765)
