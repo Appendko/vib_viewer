@@ -2431,6 +2431,33 @@
       }
     }
 
+    async function hpcNavigate(rawPath) {
+      const path = rawPath.startsWith('/')
+        ? rawPath
+        : hpcPath.replace(/\/$/, '') + '/' + rawPath;
+      const list = document.getElementById('hpc-list');
+      list.innerHTML = '<div class="hpc-item" style="pointer-events:none;opacity:0.5">Loading…</div>';
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 5000);
+        const r = await fetch(`${HPC_BASE}/api/ls?path=${encodeURIComponent(path)}`, {signal: ctrl.signal});
+        clearTimeout(t);
+        if (r.ok) {
+          const items = await r.json();
+          hpcPath = path;
+          document.getElementById('hpc-path').value = path;
+          hpcRenderList(items);
+        } else {
+          // Not a directory — treat as file
+          list.innerHTML = '';
+          document.getElementById('hpc-path').value = hpcPath;
+          await hpcFetchFile(path, path.split('/').pop() || path);
+        }
+      } catch (err) {
+        list.innerHTML = `<div class="hpc-item" style="color:#f87171;pointer-events:none">${err.name==='AbortError'?'Timeout':err.message}</div>`;
+      }
+    }
+
     function hpcRenderList(items) {
       const list = document.getElementById('hpc-list');
       list.innerHTML = '';
@@ -2891,7 +2918,7 @@
       });
 
       pathIn.addEventListener('keydown', e => {
-        if (e.key === 'Enter') hpcLs(pathIn.value.trim() || '/');
+        if (e.key === 'Enter') hpcNavigate(pathIn.value.trim() || '/');
       });
 
       upBtn.addEventListener('click', () => {
