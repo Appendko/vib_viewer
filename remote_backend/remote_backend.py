@@ -87,12 +87,7 @@ def _parse_roots():
 ROOTS = _parse_roots()
 _ALLOWED_ROOTS = list({Path(p) for p in ROOTS.values()} | {ALLOWED_ROOT})
 
-SUPPORTED_EXTENSIONS = {
-    # vib_viewer
-    ".log", ".out", ".hess", ".fchk", ".json", ".cjson",
-    # spectra_viewer
-    ".peak", ".spec", ".jdx", ".dx", ".csv", ".txt", ".dat",
-}
+VIB_EXTENSIONS = {".log", ".out", ".hess", ".fchk", ".json", ".cjson"}
 
 
 def safe_path(path: str) -> Path:
@@ -116,11 +111,13 @@ def ping():
 
 
 @app.get("/api/ls")
-def list_dir(path: str = Query(default=str(ALLOWED_ROOT))):
+def list_dir(path: str = Query(default=str(ALLOWED_ROOT)),
+             exts: str = Query(default="")):
     """
-    List directory contents (folders first, then supported files, both
-    sorted alphabetically). parent is null when at a root directory,
-    which disables the ↑ button in the UI.
+    List directory contents (folders first, then files, both sorted
+    alphabetically). parent is null when at a root directory.
+    exts: optional comma-separated extension filter e.g. ".log,.out".
+    If omitted or empty, all non-hidden files are listed.
     """
     p = safe_path(path)
 
@@ -129,13 +126,15 @@ def list_dir(path: str = Query(default=str(ALLOWED_ROOT))):
     if not p.is_dir():
         raise HTTPException(status_code=400, detail=f"Not a directory: {path}")
 
+    ext_filter = {e.strip().lower() for e in exts.split(",") if e.strip()} if exts else None
+
     entries = []
     try:
         for item in sorted(p.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
             if item.name.startswith("."):
                 continue
             is_dir = item.is_dir()
-            if is_dir or item.suffix.lower() in SUPPORTED_EXTENSIONS:
+            if is_dir or ext_filter is None or item.suffix.lower() in ext_filter:
                 entries.append({
                     "name": item.name,
                     "path": str(item),
@@ -162,8 +161,6 @@ def read_file(path: str = Query(...)):
         raise HTTPException(status_code=404, detail=f"File not found: {path}")
     if not p.is_file():
         raise HTTPException(status_code=400, detail=f"Not a file: {path}")
-    if p.suffix.lower() not in SUPPORTED_EXTENSIONS:
-        raise HTTPException(status_code=400, detail=f"Unsupported file type: {p.suffix}")
 
     try:
         content = p.read_text(errors="replace")

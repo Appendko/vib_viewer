@@ -2500,7 +2500,7 @@
       try {
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), 5000);
-        const r = await fetch(`${HPC_BASE}/api/ls?path=${encodeURIComponent(path)}`, {signal: ctrl.signal});
+        const r = await fetch(`${HPC_BASE}/api/ls?path=${encodeURIComponent(path)}&exts=.log,.out,.hess,.fchk,.json,.cjson`, {signal: ctrl.signal});
         clearTimeout(t);
         if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
         const data = await r.json();
@@ -2520,7 +2520,7 @@
       try {
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), 5000);
-        const r = await fetch(`${HPC_BASE}/api/ls?path=${encodeURIComponent(path)}`, {signal: ctrl.signal});
+        const r = await fetch(`${HPC_BASE}/api/ls?path=${encodeURIComponent(path)}&exts=.log,.out,.hess,.fchk,.json,.cjson`, {signal: ctrl.signal});
         clearTimeout(t);
         if (r.ok) {
           const data = await r.json();
