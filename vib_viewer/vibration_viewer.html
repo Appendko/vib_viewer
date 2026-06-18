@@ -245,10 +245,17 @@
     #gif-status { font-size: 0.72rem; color: var(--subtle); text-align: center; margin-top: 3px; min-height: 1em; }
     /* ── HPC file browser ── */
     #hpc-section { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 6px; }
+    #hpc-adv-toggle {
+      width: 100%; padding: 2px 0; background: none; border: none;
+      color: var(--text-dim); font-size: 0.72rem; text-align: left; cursor: pointer;
+      display: flex; align-items: center; gap: 4px;
+    }
+    #hpc-adv-toggle:hover { color: var(--text); }
+    #hpc-adv-body { display: none; flex-direction: column; gap: 4px; margin-top: 4px; }
     #hpc-btn {
       width: 100%; padding: 3px 0; background: none; border: none;
       color: var(--subtle); font-size: 0.76rem; text-align: left; cursor: pointer;
-      display: flex; align-items: center; gap: 5px;
+      display: none; align-items: center; gap: 5px;
     }
     #hpc-btn:hover { color: var(--text-dim); }
     #hpc-overlay {
@@ -318,13 +325,19 @@
       </div>
       <div id="file-name"></div>
 
-      <!-- ── HPC file browser ── -->
+      <!-- ── Remote file browser ── -->
       <div id="hpc-section">
-        <button id="hpc-btn">
-          📂 Remote Files
-          <span id="hpc-status-dot" style="width:7px;height:7px;border-radius:50%;background:var(--border);display:inline-block;flex-shrink:0"></span>
-          <span id="hpc-status-txt" style="font-size:0.65rem;color:var(--text-dim)">—</span>
-        </button>
+        <button id="hpc-adv-toggle"><span id="hpc-adv-arrow">▸</span> Advanced</button>
+        <div id="hpc-adv-body">
+          <label style="display:flex;align-items:center;gap:5px;font-size:0.71rem;color:var(--text-dim);cursor:pointer">
+            <input type="checkbox" id="hpc-remote-cb"> Show Remote Files
+          </label>
+          <button id="hpc-btn">
+            📂 Remote Files
+            <span id="hpc-status-dot" style="width:7px;height:7px;border-radius:50%;background:var(--border);display:inline-block;flex-shrink:0"></span>
+            <span id="hpc-status-txt" style="font-size:0.65rem;color:var(--text-dim)">—</span>
+          </button>
+        </div>
       </div>
 
       <div id="analysis-section" style="display:none">
@@ -2980,6 +2993,21 @@
 
     // ── HPC file browser ──
     (function () {
+      const advToggle = document.getElementById('hpc-adv-toggle');
+      const advBody   = document.getElementById('hpc-adv-body');
+      const advArrow  = document.getElementById('hpc-adv-arrow');
+      const remoteCb  = document.getElementById('hpc-remote-cb');
+
+      advToggle.addEventListener('click', () => {
+        const open = advBody.style.display === 'none' || advBody.style.display === '';
+        advBody.style.display = open ? 'flex' : 'none';
+        advArrow.textContent  = open ? '▾' : '▸';
+      });
+
+      remoteCb.addEventListener('change', e => {
+        document.getElementById('hpc-btn').style.display = e.target.checked ? 'flex' : 'none';
+      });
+
       const btn      = document.getElementById('hpc-btn');
       const hpcOvl   = document.getElementById('hpc-overlay');
       const closeBtn = document.getElementById('hpc-close');
