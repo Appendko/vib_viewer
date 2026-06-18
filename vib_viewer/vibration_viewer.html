@@ -2426,10 +2426,10 @@
         const r = await fetch(`${HPC_BASE}/api/ls?path=${encodeURIComponent(path)}`, {signal: ctrl.signal});
         clearTimeout(t);
         if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-        const items = await r.json();
+        const data = await r.json();
         hpcPath = path;
         document.getElementById('hpc-path').value = path;
-        hpcRenderList(items);
+        hpcRenderList(data.entries);
       } catch (err) {
         list.innerHTML = `<div class="hpc-item" style="color:#f87171;pointer-events:none">${err.name==='AbortError'?'Timeout':err.message}</div>`;
       }
@@ -2447,10 +2447,10 @@
         const r = await fetch(`${HPC_BASE}/api/ls?path=${encodeURIComponent(path)}`, {signal: ctrl.signal});
         clearTimeout(t);
         if (r.ok) {
-          const items = await r.json();
+          const data = await r.json();
           hpcPath = path;
           document.getElementById('hpc-path').value = path;
-          hpcRenderList(items);
+          hpcRenderList(data.entries);
         } else {
           // Not a directory — treat as file
           list.innerHTML = '';
