@@ -770,6 +770,9 @@
     }
 
     function parseGaussianLog(text) {
+      console.log('[parseGaussianLog] first 500 chars:', JSON.stringify(text.slice(0, 500)));
+      // Normalize line endings so \r\n or bare \r from API responses don't break splits
+      text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
       const lines = text.split('\n');
 
       const atoms = [];
@@ -780,6 +783,7 @@
         }
       }
       if (orientIdx === -1) throw new Error('No orientation block found in log file');
+      console.log('[parseGaussianLog] orientIdx:', orientIdx, 'lines[orientIdx..+6]:', JSON.stringify(lines.slice(orientIdx, orientIdx + 7)));
 
       let i = orientIdx + 5;
       while (i < lines.length) {
