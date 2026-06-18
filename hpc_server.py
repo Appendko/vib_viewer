@@ -43,7 +43,7 @@ ALLOWED_ROOT = Path(os.environ.get("VIB_ROOT", Path.home())).resolve()
 # ── named shortcuts shown as chips in the UI ────────────────────────────────
 # Format: VIB_ROOTS="name=/path,name2=/path2"
 def _parse_roots() -> dict:
-    roots: dict[str, str] = {}
+    roots = {}
     for item in os.environ.get("VIB_ROOTS", "").split(","):
         item = item.strip()
         if "=" in item:
@@ -57,7 +57,7 @@ def _parse_roots() -> dict:
 ROOTS = _parse_roots()
 
 # All directories the browser is allowed to browse under
-_ALLOWED_ROOTS: list[Path] = list({Path(p) for p in ROOTS.values()} | {ALLOWED_ROOT})
+_ALLOWED_ROOTS = list({Path(p) for p in ROOTS.values()} | {ALLOWED_ROOT})
 
 SUPPORTED_EXTENSIONS = {".log", ".out", ".hess", ".fchk", ".json", ".cjson"}
 
