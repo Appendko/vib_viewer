@@ -1,6 +1,6 @@
-# vib_viewer HPC backend
+# vib_viewer remote backend
 
-A small FastAPI server that lets the vib_viewer browser app browse and load files from a remote machine (HPC cluster, lab server, etc.) through an SSH tunnel.
+A small FastAPI server that lets the vib_viewer browser app browse and load files from any remote machine (lab server, cloud instance, etc.) through an SSH tunnel.
 
 ## Requirements
 
@@ -16,13 +16,13 @@ pip install fastapi uvicorn
 
 ```sh
 # Default: browse from $HOME
-python hpc_server.py
+python remote_server.py
 
 # Custom root
-VIB_ROOT=/data/projects python hpc_server.py
+VIB_ROOT=/data/projects python remote_server.py
 
 # Named shortcut chips in the UI
-VIB_ROOTS="scratch=/scratch/myuser,work=/data/work" python hpc_server.py
+VIB_ROOTS="scratch=/scratch/myuser,work=/data/work" python remote_server.py
 ```
 
 ### 2. Open an SSH tunnel on your local machine
@@ -31,7 +31,7 @@ VIB_ROOTS="scratch=/scratch/myuser,work=/data/work" python hpc_server.py
 ssh -L 8765:localhost:8765 user@remote-host
 ```
 
-### 3. Open vib_viewer and click "📂 HPC Files"
+### 3. Open vib_viewer and click "📂 Remote Files"
 
 The status dot turns green when the tunnel is active. Click a folder to navigate, click a file to load it directly into the viewer.
 

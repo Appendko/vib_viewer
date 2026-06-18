@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-HPC File Browser Backend for vib_viewer
-========================================
+Remote File Browser Backend for vib_viewer
+===========================================
 Serves file listings and file content from a remote filesystem
 to the vib_viewer running in your browser.
 
@@ -28,7 +28,7 @@ Quick start
 
        ssh -L 8765:localhost:8765 user@remote-host
 
-5. Open vib_viewer in your browser and click "📂 HPC Files".
+5. Open vib_viewer in your browser and click "📂 Remote Files".
 
 Environment variables
 ---------------------
@@ -53,7 +53,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 import os
 
-app = FastAPI(title="vib_viewer remote backend")
+app = FastAPI(title="vib_viewer remote file browser")
 
 app.add_middleware(
     CORSMiddleware,
