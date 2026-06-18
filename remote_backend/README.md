@@ -44,7 +44,9 @@ The status dot turns green when the tunnel is active. Click a folder to navigate
 
 ## Supported file types
 
-`.log`, `.out`, `.hess`, `.fchk`, `.json`, `.cjson`
+vib_viewer: `.log`, `.out`, `.hess`, `.fchk`, `.json`, `.cjson`
+
+spectra_viewer: `.peak`, `.spec`, `.jdx`, `.dx`, `.csv`, `.txt`, `.dat`
 
 ## Security notes
 

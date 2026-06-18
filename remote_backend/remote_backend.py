@@ -87,7 +87,12 @@ def _parse_roots():
 ROOTS = _parse_roots()
 _ALLOWED_ROOTS = list({Path(p) for p in ROOTS.values()} | {ALLOWED_ROOT})
 
-SUPPORTED_EXTENSIONS = {".log", ".out", ".hess", ".fchk", ".json", ".cjson"}
+SUPPORTED_EXTENSIONS = {
+    # vib_viewer
+    ".log", ".out", ".hess", ".fchk", ".json", ".cjson",
+    # spectra_viewer
+    ".peak", ".spec", ".jdx", ".dx", ".csv", ".txt", ".dat",
+}
 
 
 def safe_path(path: str) -> Path:
