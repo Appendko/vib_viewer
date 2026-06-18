@@ -2508,7 +2508,7 @@
         remoteSyncNav(data);
         remoteRenderList(data.entries);
       } catch (err) {
-        list.innerHTML = `<div class="remote-item" style="color:#f87171;pointer-events:none">${err.name==='AbortError'?'Timeout':err.message}</div>`;
+        { const d=document.createElement('div'); d.className='remote-item'; d.style.cssText='color:#f87171;pointer-events:none'; d.textContent=err.name==='AbortError'?'Timeout':err.message; list.innerHTML=''; list.appendChild(d); }
       }
     }
 
@@ -2533,7 +2533,7 @@
           await remoteFetchFile(path, path.split('/').pop() || path);
         }
       } catch (err) {
-        list.innerHTML = `<div class="remote-item" style="color:#f87171;pointer-events:none">${err.name==='AbortError'?'Timeout':err.message}</div>`;
+        { const d=document.createElement('div'); d.className='remote-item'; d.style.cssText='color:#f87171;pointer-events:none'; d.textContent=err.name==='AbortError'?'Timeout':err.message; list.innerHTML=''; list.appendChild(d); }
       }
     }
 

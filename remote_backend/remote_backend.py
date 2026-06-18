@@ -16,6 +16,10 @@ Quick start
 
        python remote_backend.py
 
+   The server prints the port to use (derived from your UID by default):
+
+       Port: 1042  →  ssh -L 8765:localhost:1042 user@remote-host
+
    Default browsing root is $HOME. Override with VIB_ROOT:
 
        VIB_ROOT=/data/projects python remote_backend.py
@@ -24,9 +28,13 @@ Quick start
 
        VIB_ROOTS="scratch=/scratch/myuser,work=/data/work" python remote_backend.py
 
-4. On your local machine, open an SSH tunnel:
+   Force a specific port with VIB_PORT:
 
-       ssh -L 8765:localhost:8765 user@remote-host
+       VIB_PORT=9000 python remote_backend.py
+
+4. On your local machine, open an SSH tunnel using the printed port:
+
+       ssh -L 8765:localhost:<PORT> user@remote-host
 
 5. Open vib_viewer in your browser and click "📂 Remote Files".
 
@@ -41,6 +49,10 @@ VIB_ROOTS   Comma-separated name=path pairs for the shortcut chips
             Each path must exist and be a directory.
             "home" is always added automatically pointing to VIB_ROOT.
 
+VIB_PORT    Port to listen on. Defaults to your UID (unique per user
+            account, avoids conflicts on shared machines). Set this if
+            you need a specific port.
+
 Security
 --------
 The server only responds to GET requests and only serves files/directories
@@ -52,6 +64,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 import os
+import socket
 
 app = FastAPI(title="vib_viewer remote file browser")
 
@@ -88,6 +101,8 @@ ROOTS = _parse_roots()
 _ALLOWED_ROOTS = list({Path(p) for p in ROOTS.values()} | {ALLOWED_ROOT})
 
 VIB_EXTENSIONS = {".log", ".out", ".hess", ".fchk", ".json", ".cjson"}
+
+MAX_FILE_BYTES = 50 * 1024 * 1024  # 50 MB
 
 
 def safe_path(path: str) -> Path:
@@ -161,6 +176,8 @@ def read_file(path: str = Query(...)):
         raise HTTPException(status_code=404, detail=f"File not found: {path}")
     if not p.is_file():
         raise HTTPException(status_code=400, detail=f"Not a file: {path}")
+    if p.stat().st_size > MAX_FILE_BYTES:
+        raise HTTPException(status_code=413, detail=f"File too large (max {MAX_FILE_BYTES // 1024 // 1024} MB)")
 
     try:
         content = p.read_text(errors="replace")
@@ -170,8 +187,30 @@ def read_file(path: str = Query(...)):
     return {"filename": p.name, "path": str(p), "content": content}
 
 
+def get_port():
+    """Return the port to listen on.
+
+    If VIB_PORT is set, use it as-is (uvicorn will fail if it's taken).
+    Otherwise try the user's UID (memorable, unique per account); fall back
+    to an OS-assigned free port if the UID port is already in use.
+    """
+    user_specified = os.environ.get("VIB_PORT")
+    if user_specified:
+        return int(user_specified)
+    preferred = os.getuid()
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        try:
+            s.bind(("127.0.0.1", preferred))
+            return preferred
+        except OSError:
+            s.bind(("127.0.0.1", 0))
+            return s.getsockname()[1]
+
+
 if __name__ == "__main__":
     import uvicorn
+    port = get_port()
     print(f"Serving files under: {ALLOWED_ROOT}")
     print(f"Named roots: {ROOTS}")
-    uvicorn.run(app, host="127.0.0.1", port=8765)
+    print(f"Port: {port}  →  ssh -L 8765:localhost:{port} user@remote-host")
+    uvicorn.run(app, host="127.0.0.1", port=port)
