@@ -2975,8 +2975,11 @@ ${SNIPPET_RENDERER}
     function initEmbedMode() {
       isEmbedMode = true;
 
-      // Body: switch from flex row to block so canvas can fill the viewport
-      document.body.style.cssText += '; display:block; position:relative;';
+      // Body: switch from flex row to block so canvas can fill the viewport.
+      // Also lock overflow on both html+body so the off-screen panel
+      // (transform:translateX(100%)) doesn't create a horizontal scroll area on mobile.
+      document.documentElement.style.overflow = 'hidden';
+      document.body.style.cssText += '; display:block; position:relative; overflow:hidden;';
 
       // Panel becomes an absolute right-side drawer, starts off-screen
       const panel = document.getElementById('panel');
