@@ -243,6 +243,32 @@
     }
     #gif-btn { width: 100%; margin-top: 5px; }
     #gif-status { font-size: 0.72rem; color: var(--subtle); text-align: center; margin-top: 3px; min-height: 1em; }
+    /* ── HPC file browser ── */
+    #hpc-section { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 6px; }
+    #hpc-toggle {
+      width: 100%; padding: 3px 0; background: none; border: none;
+      color: var(--subtle); font-size: 0.76rem; text-align: left; cursor: pointer;
+      display: flex; align-items: center; gap: 5px;
+    }
+    #hpc-toggle:hover { color: var(--text-dim); }
+    #hpc-path-row { display: flex; gap: 4px; margin: 5px 0 4px; }
+    #hpc-path {
+      flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 4px;
+      color: var(--text); font-size: 0.72rem; padding: 2px 5px; outline: none;
+    }
+    #hpc-path:focus { border-color: var(--accent); }
+    #hpc-up {
+      padding: 2px 7px; background: var(--border); border: 1px solid var(--border);
+      border-radius: 4px; color: var(--text-dim); font-size: 0.72rem; cursor: pointer;
+    }
+    #hpc-up:hover { color: var(--text); }
+    #hpc-list { max-height: 180px; overflow-y: auto; }
+    .hpc-item {
+      padding: 3px 4px; border-radius: 3px; cursor: pointer;
+      font-size: 0.74rem; color: var(--text-dim);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .hpc-item:hover { background: var(--hover-bg); color: var(--text); }
   </style>
 </head>
 <body>
@@ -259,6 +285,23 @@
         <input type="file" id="file-input" accept=".log,.out,.json,.cjson,.hess,.fchk">
       </div>
       <div id="file-name"></div>
+
+      <!-- ── HPC file browser ── -->
+      <div id="hpc-section">
+        <button id="hpc-toggle">
+          📂 HPC Files
+          <span id="hpc-status-dot" style="width:7px;height:7px;border-radius:50%;background:var(--border);display:inline-block;flex-shrink:0"></span>
+          <span id="hpc-status-txt" style="font-size:0.65rem;color:var(--text-dim)">—</span>
+          <span id="hpc-arrow" style="margin-left:auto">▸</span>
+        </button>
+        <div id="hpc-body" style="display:none">
+          <div id="hpc-path-row">
+            <input id="hpc-path" type="text" value="/home" placeholder="/home">
+            <button id="hpc-up" title="Parent directory">↑</button>
+          </div>
+          <div id="hpc-list"></div>
+        </div>
+      </div>
 
       <div id="analysis-section" style="display:none">
         <div class="method-bar">
@@ -2319,36 +2362,111 @@
       document.getElementById('analysis-section').style.display = visible ? 'block' : 'none';
     }
 
+    function loadFromText(text, filename) {
+      try {
+        const { precomputed, raw } = parseFile(text, filename);
+        molData = raw;
+        document.getElementById('file-name').textContent = filename;
+        if (raw) {
+          const cx = raw.coords.reduce((s, c) => s + c[0], 0) / raw.coords.length;
+          const cy = raw.coords.reduce((s, c) => s + c[1], 0) / raw.coords.length;
+          const cz = raw.coords.reduce((s, c) => s + c[2], 0) / raw.coords.length;
+          raw.coords = raw.coords.map(c => [c[0]-cx, c[1]-cy, c[2]-cz]);
+          buildAtomList(raw.symbols);
+          document.getElementById('status-msg').textContent =
+            `${raw.symbols.length} atoms + Hessian loaded.`;
+        } else {
+          document.getElementById('status-msg').textContent =
+            `${precomputed.atoms.length} atoms, ${precomputed.modes.length} modes loaded.`;
+        }
+        document.getElementById('run-btn').disabled = !raw;
+        showAnalysisPanel(raw !== null);
+        resetGroups();
+        loadMoleculeData(precomputed);
+      } catch (err) {
+        document.getElementById('status-msg').textContent = 'Error: ' + err.message;
+        console.error(err);
+      }
+    }
+
     function handleFile(file) {
       document.getElementById('status-msg').textContent = 'Parsing…';
       const reader = new FileReader();
-      reader.onload = e => {
-        try {
-          const { precomputed, raw } = parseFile(e.target.result, file.name);
-          molData = raw;
-          document.getElementById('file-name').textContent = file.name;
-          if (raw) {
-            const cx = raw.coords.reduce((s, c) => s + c[0], 0) / raw.coords.length;
-            const cy = raw.coords.reduce((s, c) => s + c[1], 0) / raw.coords.length;
-            const cz = raw.coords.reduce((s, c) => s + c[2], 0) / raw.coords.length;
-            raw.coords = raw.coords.map(c => [c[0]-cx, c[1]-cy, c[2]-cz]);
-            buildAtomList(raw.symbols);
-            document.getElementById('status-msg').textContent =
-              `${raw.symbols.length} atoms + Hessian loaded.`;
-          } else {
-            document.getElementById('status-msg').textContent =
-              `${precomputed.atoms.length} atoms, ${precomputed.modes.length} modes loaded.`;
-          }
-          document.getElementById('run-btn').disabled = !raw;
-          showAnalysisPanel(raw !== null);
-          resetGroups();
-          loadMoleculeData(precomputed);
-        } catch (err) {
-          document.getElementById('status-msg').textContent = 'Error: ' + err.message;
-          console.error(err);
-        }
-      };
+      reader.onload = e => loadFromText(e.target.result, file.name);
       reader.readAsText(file);
+    }
+
+    // ── HPC file browser ──
+    const HPC_BASE = 'http://localhost:8765';
+    let hpcPath = '/home';
+
+    async function hpcPing() {
+      const dot = document.getElementById('hpc-status-dot');
+      const txt = document.getElementById('hpc-status-txt');
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 3000);
+        const r = await fetch(`${HPC_BASE}/api/ping`, {signal: ctrl.signal});
+        clearTimeout(t);
+        if (r.ok) { dot.style.background='#22c55e'; txt.textContent='connected'; return true; }
+      } catch(e) {}
+      dot.style.background = '#ef4444'; txt.textContent = 'unreachable'; return false;
+    }
+
+    async function hpcLs(path) {
+      const list = document.getElementById('hpc-list');
+      list.innerHTML = '<div class="hpc-item" style="pointer-events:none;opacity:0.5">Loading…</div>';
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 5000);
+        const r = await fetch(`${HPC_BASE}/api/ls?path=${encodeURIComponent(path)}`, {signal: ctrl.signal});
+        clearTimeout(t);
+        if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+        const items = await r.json();
+        hpcPath = path;
+        document.getElementById('hpc-path').value = path;
+        hpcRenderList(items);
+      } catch (err) {
+        list.innerHTML = `<div class="hpc-item" style="color:#f87171;pointer-events:none">${err.name==='AbortError'?'Timeout':err.message}</div>`;
+      }
+    }
+
+    function hpcRenderList(items) {
+      const list = document.getElementById('hpc-list');
+      list.innerHTML = '';
+      items.sort((a,b) => (b.is_dir - a.is_dir) || a.name.localeCompare(b.name));
+      if (!items.length) {
+        list.innerHTML = '<div class="hpc-item" style="pointer-events:none;opacity:0.5">Empty</div>';
+        return;
+      }
+      for (const item of items) {
+        const row = document.createElement('div');
+        row.className = 'hpc-item';
+        row.title = item.name;
+        row.textContent = (item.is_dir ? '📁 ' : '📄 ') + item.name;
+        row.addEventListener('click', () => {
+          const p = hpcPath.replace(/\/$/, '') + '/' + item.name;
+          if (item.is_dir) hpcLs(p);
+          else hpcFetchFile(p, item.name);
+        });
+        list.appendChild(row);
+      }
+    }
+
+    async function hpcFetchFile(path, filename) {
+      document.getElementById('status-msg').textContent = 'Fetching from HPC…';
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 15000);
+        const r = await fetch(`${HPC_BASE}/api/file?path=${encodeURIComponent(path)}`, {signal: ctrl.signal});
+        clearTimeout(t);
+        if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+        const text = await r.text();
+        loadFromText(text, filename);
+      } catch (err) {
+        document.getElementById('status-msg').textContent =
+          'HPC error: ' + (err.name==='AbortError'?'Timeout':err.message);
+      }
     }
 
     function showEquilibriumGeometry() {
@@ -2755,6 +2873,33 @@
       e.preventDefault(); overlay.classList.remove('active');
       if (e.dataTransfer.files.length > 0) handleFile(e.dataTransfer.files[0]);
     });
+
+    // ── HPC file browser ──
+    (function () {
+      const toggle  = document.getElementById('hpc-toggle');
+      const body    = document.getElementById('hpc-body');
+      const arrow   = document.getElementById('hpc-arrow');
+      const pathIn  = document.getElementById('hpc-path');
+      const upBtn   = document.getElementById('hpc-up');
+      let pinged = false;
+
+      toggle.addEventListener('click', () => {
+        const open = body.style.display === 'none';
+        body.style.display = open ? '' : 'none';
+        arrow.textContent  = open ? '▾' : '▸';
+        if (open && !pinged) { pinged = true; hpcPing().then(ok => { if (ok) hpcLs(hpcPath); }); }
+      });
+
+      pathIn.addEventListener('keydown', e => {
+        if (e.key === 'Enter') hpcLs(pathIn.value.trim() || '/');
+      });
+
+      upBtn.addEventListener('click', () => {
+        const parts = hpcPath.replace(/\/+$/, '').split('/');
+        parts.pop();
+        hpcLs(parts.join('/') || '/');
+      });
+    })();
 
     // ── Spectrum panel controls ──
     const spectrumPanel = document.getElementById('spectrum-panel');
