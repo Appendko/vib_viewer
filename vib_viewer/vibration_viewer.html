@@ -2807,6 +2807,7 @@
         btn.classList.add('active');
         arrowGroup.visible = (displayMode === 'quiver' || displayMode === 'both');
         updateSliderStates();
+        updateGifBtnLabel();
         if (currentMoleculeData && currentMode) {
           atomMeshes.forEach((mesh, i) => {
             const a = currentMoleculeData.atoms[i];
@@ -3058,9 +3059,43 @@
     })();
     window.addEventListener('resize', () => { drawSpectrum(); });
 
-    // ── GIF recorder ──
+    // ── GIF recorder / PNG exporter ──
     let _gifWorkerUrl = null;
     let isRecording = false;
+
+    function updateGifBtnLabel() {
+      const isQuiver = displayMode === 'quiver';
+      document.getElementById('gif-btn').textContent = isQuiver ? 'Export PNG' : 'Record GIF';
+      // FPS and Cycles controls are irrelevant for static PNG export
+      ['gif-fps', 'gif-cycles'].forEach(id => {
+        const el = document.getElementById(id);
+        el.style.display = isQuiver ? 'none' : '';
+        const lbl = el.previousElementSibling;
+        if (lbl && lbl.tagName === 'LABEL') lbl.style.display = isQuiver ? 'none' : '';
+      });
+    }
+
+    function exportPNG() {
+      if (!currentMode) { alert('Select a vibration mode first.'); return; }
+      const spcPct = parseFloat(document.getElementById('gif-size-sel').value) || 0.5;
+      const W = Math.max(1, Math.round(renderer.domElement.width  * spcPct));
+      const H = Math.max(1, Math.round(renderer.domElement.height * spcPct));
+      const status = document.getElementById('gif-status');
+
+      renderer.render(scene, camera);
+      const offCanvas = document.createElement('canvas');
+      offCanvas.width = W; offCanvas.height = H;
+      offCanvas.getContext('2d').drawImage(renderer.domElement, 0, 0, W, H);
+      offCanvas.toBlob(blob => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `mode${currentMode.index}_${Math.round(currentMode.frequency)}cm-1.png`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        status.textContent = `Saved (${(blob.size / 1024).toFixed(0)} KB, ${W}×${H}px)`;
+      }, 'image/png');
+    }
 
     async function ensureGifWorker() {
       if (_gifWorkerUrl) return _gifWorkerUrl;
@@ -3075,7 +3110,6 @@
     async function recordGIF() {
       if (!currentMode) { alert('Select a vibration mode first.'); return; }
       if (isRecording) return;
-      if (displayMode === 'quiver') { alert('Switch to Animate or Both mode first.'); return; }
 
       const btn    = document.getElementById('gif-btn');
       const status = document.getElementById('gif-status');
@@ -3152,7 +3186,10 @@
       btn.textContent = 'Encoding…';
       encoder.render();
     }
-    document.getElementById('gif-btn').addEventListener('click', recordGIF);
+    document.getElementById('gif-btn').addEventListener('click', () => {
+      if (displayMode === 'quiver') exportPNG();
+      else recordGIF();
+    });
 
     // ── Snippet export ──
 
